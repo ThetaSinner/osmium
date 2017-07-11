@@ -15,12 +15,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate bytes;
-extern crate futures;
-extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_proto;
-extern crate tokio_service;
+// std
+use std::fmt;
 
-pub mod http_version;
-pub mod http;
+#[derive(Debug)]
+pub enum HttpVersion {
+    Http10,
+    Http11,
+    Http2,
+}
+
+impl fmt::Display for HttpVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            HttpVersion::Http10 => write!(f, "1.0"),
+            HttpVersion::Http11 => write!(f, "1.1"),
+            HttpVersion::Http2 => write!(f, "2")
+        }
+    }
+}

@@ -15,12 +15,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate bytes;
-extern crate futures;
-extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_proto;
-extern crate tokio_service;
+// std
+use std::fmt::Write;
 
-pub mod http_version;
-pub mod http;
+// tokio
+use bytes::BytesMut;
+
+// osmium
+use http_version::HttpVersion;
+
+#[derive(Debug)]
+pub struct Response {
+    pub version: HttpVersion
+}
+
+pub fn to_outgoing(res: Response, buf: &mut BytesMut) {
+    write!(buf, "HTTP/{} OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n", res.version).unwrap();
+}

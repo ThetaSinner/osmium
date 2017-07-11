@@ -15,12 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate bytes;
-extern crate futures;
-extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_proto;
-extern crate tokio_service;
-
-pub mod http_version;
-pub mod http;
+pub mod codec;
+pub mod request;
+pub mod response;

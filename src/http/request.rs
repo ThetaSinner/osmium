@@ -15,12 +15,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate bytes;
-extern crate futures;
-extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_proto;
-extern crate tokio_service;
+// std
+use std::io;
 
-pub mod http_version;
-pub mod http;
+// tokio
+use bytes::{Buf, IntoBuf, BytesMut};
+
+// osmium
+use http_version::HttpVersion;
+
+pub fn from_incoming(buf: &mut BytesMut) -> io::Result<Option<Request>> {
+    let len = buf.len();
+    let t = buf.split_to(len);
+
+    if len > 0 {
+        Ok(Some(Request {
+            version: HttpVersion::Http11,
+            raw: format!("{:?}", t.into_buf().reader())
+        }))
+    }
+    else {
+        Ok(None)
+    }
+}
+
+pub struct Request {
+    pub version: HttpVersion,
+    pub raw: String
+}
