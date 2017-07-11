@@ -19,28 +19,24 @@
 use std::io;
 
 // tokio
-use bytes::{Buf, IntoBuf, BytesMut};
+use tokio_io::codec::Framed;
+use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_proto::pipeline::ServerProto;
 
 // osmium
-use http_version::HttpVersion;
+use http::request;
+use http::response;
+use http::http_codec;
 
-#[derive(Debug)]
-pub struct Request {
-    pub version: HttpVersion,
-    pub raw: String
-}
+pub struct HttpProtocol;
 
-pub fn from_incoming(buf: &mut BytesMut) -> io::Result<Option<Request>> {
-    let len = buf.len();
-    let t = buf.split_to(len);
+impl<T: AsyncRead + AsyncWrite + 'static> ServerProto<T> for HttpProtocol {
+    type Request = request::Request;
+    type Response = response::Response;
+    type Transport = Framed<T, http_codec::HttpCodec>;
+    type BindTransport = io::Result<Framed<T, http_codec::HttpCodec>>;
 
-    if len > 0 {
-        Ok(Some(Request {
-            version: HttpVersion::Http11,
-            raw: format!("{:?}", t.into_buf().reader())
-        }))
-    }
-    else {
-        Ok(None)
+    fn bind_transport(&self, io: T) -> io::Result<Framed<T, http_codec::HttpCodec>> {
+        Ok(io.framed(http_codec::HttpCodec))
     }
 }

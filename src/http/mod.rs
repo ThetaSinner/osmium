@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod codec;
+pub mod http_codec;
+pub mod http_protocol;
 pub mod request;
 pub mod response;

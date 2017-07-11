@@ -20,43 +20,28 @@ use std::io;
 
 // tokio
 use bytes::BytesMut;
-use tokio_io::codec::{Encoder, Decoder, Framed};
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_proto::pipeline::ServerProto;
+use tokio_io::codec::{Encoder, Decoder};
 
 // osmium
-use http::request::{self, Request};
-use http::response::{self, Response};
-
-pub struct Http;
-
-impl<T: AsyncRead + AsyncWrite + 'static> ServerProto<T> for Http {
-    type Request = Request;
-    type Response = Response;
-    type Transport = Framed<T, HttpCodec>;
-    type BindTransport = io::Result<Framed<T, HttpCodec>>;
-
-    fn bind_transport(&self, io: T) -> io::Result<Framed<T, HttpCodec>> {
-        Ok(io.framed(HttpCodec))
-    }
-}
+use http::request;
+use http::response;
 
 pub struct HttpCodec;
 
 impl Decoder for HttpCodec {
-    type Item = Request;
+    type Item = request::Request;
     type Error = io::Error;
 
-    fn decode(&mut self, buf: &mut BytesMut) -> io::Result<Option<Request>> {
+    fn decode(&mut self, buf: &mut BytesMut) -> io::Result<Option<Self::Item>> {
         request::from_incoming(buf)
     }
 }
 
 impl Encoder for HttpCodec {
-    type Item = Response;
+    type Item = response::Response;
     type Error = io::Error;
 
-    fn encode(&mut self, item: Response, buf: &mut BytesMut) -> io::Result<()> {
+    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut) -> io::Result<()> {
         response::to_outgoing(item, buf);
         Ok(())
     }

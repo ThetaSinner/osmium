@@ -31,7 +31,7 @@ use tokio_service::Service;
 use tokio_proto::TcpServer;
 
 // osmium
-use osmium::http::{codec, request, response};
+use osmium::http::{http_protocol, request, response};
 
 #[test]
 fn serve_http_initial_test() {
@@ -58,7 +58,7 @@ fn serve_http_initial_test() {
     let addr = "0.0.0.0:2234".parse().unwrap();
 
     // The builder requires a protocol and an address
-    let server = TcpServer::new(codec::Http, addr);
+    let server = TcpServer::new(http_protocol::HttpProtocol, addr);
 
     // We provide a way to *instantiate* the service for each new
     // connection; here, we just immediately return a new instance.
