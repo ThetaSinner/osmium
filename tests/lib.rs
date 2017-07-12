@@ -16,51 +16,27 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate osmium;
-extern crate futures;
-extern crate tokio_service;
-extern crate tokio_proto;
 #[macro_use] extern crate log;
 extern crate pretty_env_logger;
 
-// std
-use std::io;
-
-// tokio
-use futures::{future, Future, BoxFuture};
-use tokio_service::Service;
-use tokio_proto::TcpServer;
-
 // osmium
-use osmium::http::{http_protocol, request, response};
+use osmium::http::{request, response, server, handler};
 
 #[test]
 fn serve_http_initial_test() {
     pretty_env_logger::init().unwrap();
 
-    struct InitialTestService;
+    debug!("Starting a server");
 
-    impl Service for InitialTestService {
-        type Request = request::Request;
-        type Response = response::Response;
-        type Error = io::Error;
-        type Future = BoxFuture<response::Response, io::Error>;
+    struct MyHandler;
 
-        fn call(&self, req: Self::Request) -> Self::Future {
-            let response = response::Response {
+    impl handler::Handler for MyHandler {
+        fn process(&self, req: request::Request) -> response::Response {
+            response::Response {
                 version: req.version
-            };
-
-            future::ok(response).boxed()
+            }
         }
     }
 
-    // Specify the localhost address
-    let addr = "0.0.0.0:2234".parse().unwrap();
-
-    // The builder requires a protocol and an address
-    let server = TcpServer::new(http_protocol::HttpProtocol, addr);
-
-    // We provide a way to *instantiate* the service for each new
-    // connection; here, we just immediately return a new instance.
-    server.serve(|| Ok(InitialTestService));
+    server::run(MyHandler, None);
 }

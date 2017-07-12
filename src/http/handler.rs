@@ -15,10 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod http_codec;
-pub mod http_protocol;
-pub mod http_service;
-pub mod request;
-pub mod response;
-pub mod handler;
-pub mod server;
+// osmium
+use http::request;
+use http::response;
+
+pub trait Handler {
+    fn process(&self, req: request::Request) -> response::Response;
+}
