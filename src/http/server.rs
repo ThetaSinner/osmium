@@ -42,7 +42,7 @@ pub fn run<T>(handler: T, settings: Option<Settings>) where T: handler::Handler 
         )
     }
     else {
-        "0.0.0.0:80".to_owned()
+        "0.0.0.0:8000".to_owned()
     }).parse().unwrap();
 
     // The builder requires a protocol and an address

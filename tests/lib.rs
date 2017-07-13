@@ -18,25 +18,54 @@
 extern crate osmium;
 #[macro_use] extern crate log;
 extern crate pretty_env_logger;
+extern crate curl;
+
+// std
+use std::thread;
+use std::str;
+
+// curl
+use curl::easy::Easy;
 
 // osmium
 use osmium::http::{request, response, server, handler};
 
 #[test]
-fn serve_http_initial_test() {
+fn empty_request() {
     pretty_env_logger::init().unwrap();
 
-    debug!("Starting a server");
+    thread::spawn(move || {
+        debug!("Starting a server");
 
-    struct MyHandler;
+        struct MyHandler;
 
-    impl handler::Handler for MyHandler {
-        fn process(&self, req: request::Request) -> response::Response {
-            response::Response {
-                version: req.version
+        impl handler::Handler for MyHandler {
+            fn process(&self, req: request::Request) -> response::Response {
+                debug!("Responding to request");
+                response::Response {
+                    version: req.version
+                }
             }
         }
+
+        server::run(MyHandler, None);
+    });
+
+    let mut response = Vec::new();
+    {
+        let mut handle = Easy::new();   
+
+        handle.url("http://localhost:8000").unwrap();
+        handle.show_header(true).unwrap();
+        let mut transfer = handle.transfer();
+        transfer.write_function(|new_data| {
+            response.extend_from_slice(new_data);
+            Ok(new_data.len())
+        }).unwrap();
+        debug!("Making a request to the server");
+        transfer.perform().unwrap();
     }
 
-    server::run(MyHandler, None);
+    assert_eq!(response.len(), 50);
+    assert_eq!(str::from_utf8(response.as_slice()).unwrap(), "HTTP/1.1 OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n");
 }
