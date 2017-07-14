@@ -25,6 +25,18 @@ pub enum HttpVersion {
     Http2,
 }
 
+impl From<u8> for HttpVersion {
+    fn from(version: u8) -> HttpVersion {
+        match version {
+            0 => HttpVersion::Http10,
+            1 => HttpVersion::Http11,
+            // TODO httparse errors if the version is invalid so this line should not run right now
+            // but needs to be changed if the version might not match.
+            _ => panic!("Invalid http version")
+        }
+    }
+}
+
 impl fmt::Display for HttpVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

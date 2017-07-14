@@ -25,20 +25,48 @@ use bytes::{Buf, IntoBuf, BytesMut};
 use http_version::HttpVersion;
 use http::request::Request;
 use http::header::Headers;
+use httparse;
 
 pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
-    let len = buf.len();
-    let t = buf.split_to(len);
+    // TODO Not quite sure under what conditions this buffer is empty and how to handle that.
+    // For now assume we don't want to process and further and end this decode.
+    if buf.len() == 0 {
+        return Ok(None)
+    }
 
-    if len > 0 {
-        Ok(Some(Request {
-            version: HttpVersion::Http11,
-            uri: "/".to_owned(),
-            headers: Headers::new(),
-            body: None
-        }))
-    }
-    else {
-        Ok(None)
-    }
+    let response = {
+        let mut headers = [httparse::EMPTY_HEADER; 16];
+        let mut req = httparse::Request::new(&mut headers);
+
+        // The parse is done inside a block because of buffer ownership. Feel free to read the docs for `bytes`, `httparse` and `tokio_io` 
+        let parsing = req.parse(buf).unwrap();
+        if parsing.is_complete() {
+            let version = if let Some(v) = req.version {
+                HttpVersion::from(v)
+            }
+            else {
+                // TODO default for now.
+                HttpVersion::Http11
+            };
+
+            info!("Request ok, proceeding.");
+
+            Some(Request {
+                version: version,
+                uri: "/".to_owned(),
+                headers: Headers::new(),
+                body: None
+            })
+        }
+        else {
+            error!("Server does not support streamed requests yet.");
+            None
+        }
+    };
+
+    // Consume all data from the buffer.
+    let len = buf.len();
+    buf.split_to(len);
+
+    Ok(response)
 }
