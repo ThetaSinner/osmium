@@ -17,9 +17,12 @@
 
 // osmium
 use http_version::HttpVersion;
+use http::header;
 
 #[derive(Debug)]
 pub struct Request {
     pub version: HttpVersion,
-    pub raw: String
+    pub uri: String,
+    pub headers: header::Headers,
+    pub body: Option<String>
 }

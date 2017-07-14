@@ -24,6 +24,7 @@ use bytes::{Buf, IntoBuf, BytesMut};
 // osmium
 use http_version::HttpVersion;
 use http::request::Request;
+use http::header::Headers;
 
 pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
     let len = buf.len();
@@ -32,7 +33,9 @@ pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
     if len > 0 {
         Ok(Some(Request {
             version: HttpVersion::Http11,
-            raw: format!("{:?}", t.into_buf().reader())
+            uri: "/".to_owned(),
+            headers: Headers::new(),
+            body: None
         }))
     }
     else {

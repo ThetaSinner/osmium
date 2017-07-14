@@ -15,9 +15,43 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod request;
-pub mod response;
-pub mod header;
-pub mod handler;
-pub mod server;
-mod net;
+// std
+use std::collections::HashMap;
+
+#[derive(Debug)]
+pub enum HeaderName {
+    ContentLength
+}
+
+#[derive(Debug)]
+pub enum HeaderValue {
+    Str(String),
+    Num(i32)
+}
+
+#[derive(Debug)]
+pub struct Headers {
+    headers: HashMap<String, HeaderValue>
+}
+
+impl Headers {
+    pub fn new() -> Self {
+        Headers {
+            headers: HashMap::new()
+        }
+    }
+
+    pub fn add(&mut self, name: HeaderName, value: HeaderValue) {
+        self.headers.insert(String::from(name), value);
+    }
+
+
+}
+
+impl From<HeaderName> for String {
+    fn from(name: HeaderName) -> Self {
+        match name {
+            HeaderName::ContentLength => String::from("Content-Length")
+        }
+    }
+}
