@@ -15,34 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-// std
-use std::io;
-
-// tokio
-use bytes::BytesMut;
-use tokio_io::codec::{Encoder, Decoder};
-
-// osmium
-use http::request;
-use http::response;
-
-pub struct HttpCodec;
-
-impl Decoder for HttpCodec {
-    type Item = request::Request;
-    type Error = io::Error;
-
-    fn decode(&mut self, buf: &mut BytesMut) -> io::Result<Option<Self::Item>> {
-        request::from_incoming(buf)
-    }
-}
-
-impl Encoder for HttpCodec {
-    type Item = response::Response;
-    type Error = io::Error;
-
-    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut) -> io::Result<()> {
-        response::to_outgoing(item, buf);
-        Ok(())
-    }
-}
+pub mod http_codec;
+pub mod http_protocol;
+pub mod http_service;
+pub mod request_decode;
+pub mod response_encode;

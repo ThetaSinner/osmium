@@ -27,9 +27,7 @@ use futures::BoxFuture;
 use futures_cpupool::CpuPool;
 
 // osmium
-use http::request;
-use http::response;
-use http::handler;
+use http::{request, response, handler};
 
 pub struct HttpService<T: handler::Handler> {
     pub cpupool: CpuPool,

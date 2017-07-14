@@ -16,27 +16,17 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // std
-use std::io;
+use std::fmt::Write;
 
 // tokio
-use tokio_io::codec::Framed;
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_proto::pipeline::ServerProto;
+use bytes::BytesMut;
 
 // osmium
-use http::request;
-use http::response;
-use http::http_codec;
+use http::response::Response;
 
-pub struct HttpProtocol;
-
-impl<T: AsyncRead + AsyncWrite + 'static> ServerProto<T> for HttpProtocol {
-    type Request = request::Request;
-    type Response = response::Response;
-    type Transport = Framed<T, http_codec::HttpCodec>;
-    type BindTransport = io::Result<Framed<T, http_codec::HttpCodec>>;
-
-    fn bind_transport(&self, io: T) -> io::Result<Framed<T, http_codec::HttpCodec>> {
-        Ok(io.framed(http_codec::HttpCodec))
-    }
+/// Convert a `Response` struct to http transport format
+///
+/// This is called from the http codec which is the tokio tranport format conversion.
+pub fn encode(res: Response, buf: &mut BytesMut) {
+    write!(buf, "HTTP/{} OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n", res.version).unwrap();
 }

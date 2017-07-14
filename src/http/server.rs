@@ -24,18 +24,46 @@ use tokio_proto::TcpServer;
 use futures_cpupool::CpuPool;
 
 // osmium
-use http::{handler, http_protocol, http_service};
+use http::handler;
+use http::net::{http_protocol, http_service};
 
+/// Server settings
 pub struct Settings {
     pub host: Option<String>,
     pub port: Option<i32>,
 }
 
+/// Run the http server with supplied request/response handler and optional settings
+///
+/// # Arguments
+///
+/// * `handler` - Request/response handler for processing http content
+/// * `settings` - Server settings struct
 pub fn run<T>(handler: T, settings: Option<Settings>) where T: handler::Handler + marker::Send + marker::Sync + 'static {
     let cpu_pool = CpuPool::new(10);
     let handler_ref = Arc::new(handler);
 
-    let addr = (if let Some(settings) = settings {
+    let addr = get_addr(settings).parse().unwrap();
+
+    // Create the tokio_service tcp server.
+    let server = TcpServer::new(http_protocol::HttpProtocol, addr);
+
+    // Start the server.
+    server.serve(move || {
+        Ok(http_service::HttpService {
+            cpupool: cpu_pool.clone(),
+            handler: handler_ref.clone()
+        })
+    });
+}
+
+/// Create an address with format `host:port`
+///
+/// # Arguments
+///
+/// * `settings` - Server settings struct can specify host and port
+fn get_addr(settings: Option<Settings>) -> String {
+    if let Some(settings) = settings {
         format!("{}:{}", 
         match settings.host {Some(host) => host, None => "0.0.0.0".to_owned()},
         match settings.port {Some(port) => port, None => 8000}
@@ -43,15 +71,5 @@ pub fn run<T>(handler: T, settings: Option<Settings>) where T: handler::Handler 
     }
     else {
         "0.0.0.0:8000".to_owned()
-    }).parse().unwrap();
-
-    // The builder requires a protocol and an address
-    let server = TcpServer::new(http_protocol::HttpProtocol, addr);
-
-    server.serve(move || {
-        Ok(http_service::HttpService {
-            cpupool: cpu_pool.clone(),
-            handler: handler_ref.clone()
-        })
-    });
+    }
 }

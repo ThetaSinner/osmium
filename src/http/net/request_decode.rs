@@ -15,11 +15,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// std
+use std::io;
+
+// tokio
+use bytes::{Buf, IntoBuf, BytesMut};
+
 // osmium
 use http_version::HttpVersion;
+use http::request::Request;
 
-#[derive(Debug)]
-pub struct Request {
-    pub version: HttpVersion,
-    pub raw: String
+pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
+    let len = buf.len();
+    let t = buf.split_to(len);
+
+    if len > 0 {
+        Ok(Some(Request {
+            version: HttpVersion::Http11,
+            raw: format!("{:?}", t.into_buf().reader())
+        }))
+    }
+    else {
+        Ok(None)
+    }
 }

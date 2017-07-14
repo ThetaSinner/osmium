@@ -15,20 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-// std
-use std::fmt::Write;
-
-// tokio
-use bytes::BytesMut;
-
 // osmium
 use http_version::HttpVersion;
 
 #[derive(Debug)]
 pub struct Response {
     pub version: HttpVersion
-}
-
-pub fn to_outgoing(res: Response, buf: &mut BytesMut) {
-    write!(buf, "HTTP/{} OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n", res.version).unwrap();
 }
