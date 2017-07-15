@@ -20,7 +20,10 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum HeaderName {
-    ContentLength
+    ContentLength,
+    Host,
+    Accept,
+    CustomHeader(String)
 }
 
 #[derive(Debug)]
@@ -44,14 +47,32 @@ impl Headers {
     pub fn add(&mut self, name: HeaderName, value: HeaderValue) {
         self.headers.insert(String::from(name), value);
     }
-
-
 }
 
+// Convert `HeaderName` enum values to string for serialisation 
+// and so that the enum type can be pseudo-used as a hash key.
 impl From<HeaderName> for String {
     fn from(name: HeaderName) -> Self {
         match name {
-            HeaderName::ContentLength => String::from("Content-Length")
+            HeaderName::ContentLength => String::from("Content-Length"),
+            HeaderName::Host => String::from("Host"),
+            HeaderName::Accept => String::from("Accept"),
+            HeaderName::CustomHeader(v) => v
+        }
+    }
+}
+
+// Convert strings to `HeaderName` for http request deserialisation.
+impl<'a> From<&'a str> for HeaderName {
+    fn from(name: &str) -> Self {
+        match name {
+            "Content-Length" => HeaderName::ContentLength,
+            "Host" => HeaderName::Host,
+            "Accept" => HeaderName::Accept,
+            _ => {
+                info!("Missing header conversion for [{}]. Will treat as custom header.", name);
+                HeaderName::CustomHeader(String::from(name))
+            }
         }
     }
 }

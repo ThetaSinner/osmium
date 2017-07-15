@@ -24,7 +24,7 @@ use bytes::{Buf, IntoBuf, BytesMut};
 // osmium
 use http_version::HttpVersion;
 use http::request::Request;
-use http::header::Headers;
+use http::header::{Headers, HeaderName, HeaderValue};
 use httparse;
 
 pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
@@ -49,11 +49,26 @@ pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
                 HttpVersion::Http11
             };
 
+            let uri = req.path.unwrap_or("/");
+
+            let mut headers = Headers::new();
+            for req_header in req.headers.iter() {
+                let header_name = HeaderName::from(req_header.name);
+                let val = String::from_utf8(req_header.value.to_vec()).unwrap();
+                match header_name {
+                    HeaderName::ContentLength => {
+                        let val = val.parse::<i32>().unwrap();
+                        headers.add(header_name, HeaderValue::Num(val));
+                    },
+                    _ => headers.add(header_name, HeaderValue::Str(val))
+                }
+            }
+
             info!("Request ok, proceeding.");
 
             Some(Request {
                 version: version,
-                uri: "/".to_owned(),
+                uri: uri.to_owned(),
                 headers: Headers::new(),
                 body: None
             })
