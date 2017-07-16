@@ -23,10 +23,24 @@ use bytes::BytesMut;
 
 // osmium
 use http::response::Response;
+use http::header::HeaderValue;
 
 /// Convert a `Response` struct to http transport format
 ///
 /// This is called from the http codec which is the tokio tranport format conversion.
 pub fn encode(res: Response, buf: &mut BytesMut) {
-    write!(buf, "HTTP/{} OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n", res.version).unwrap();
+    debug!("Encoding response [{:?}]", res);
+    write!(buf, "HTTP/{} {}", res.version, res.status).unwrap();
+    let ref headers = res.headers;
+    for (name, value) in headers.iter() {
+        write!(buf, "\r\n{}: {}", name, value).unwrap();
+    }
+
+    write!(buf, "\r\n\r\n");
+
+    if let Some(body) = res.body {
+        write!(buf, "{}", body).unwrap();
+    }
+
+    debug!("Finished encoding response: [{:?}]", buf);
 }

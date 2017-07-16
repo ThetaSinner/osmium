@@ -15,15 +15,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-// osmium
-use http_version::HttpVersion;
-use http::status::HttpStatus;
-use http::header::Headers;
+// std
+use std::fmt;
 
 #[derive(Debug)]
-pub struct Response {
-    pub version: HttpVersion,
-    pub status: HttpStatus,
-    pub headers: Headers,
-    pub body: Option<String>
+pub enum HttpStatus {
+    Ok,
+    BadRequest,
+    Custom(String, String)
+}
+
+impl fmt::Display for HttpStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            HttpStatus::Ok => write!(f, "200 OK"),
+            HttpStatus::BadRequest => write!(f, "400 Bad Request"),
+            HttpStatus::Custom(ref code, ref phrase) => write!(f, "{} {}", code, phrase)
+        }
+    }
 }

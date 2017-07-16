@@ -17,6 +17,8 @@
 
 // std
 use std::collections::HashMap;
+use std::collections::hash_map;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum HeaderName {
@@ -47,6 +49,10 @@ impl Headers {
     pub fn add(&mut self, name: HeaderName, value: HeaderValue) {
         self.headers.insert(String::from(name), value);
     }
+
+    pub fn iter(&self) -> hash_map::Iter<String, HeaderValue> {
+        self.headers.iter()
+    }
 }
 
 // Convert `HeaderName` enum values to string for serialisation 
@@ -73,6 +79,15 @@ impl<'a> From<&'a str> for HeaderName {
                 info!("Missing header conversion for [{}]. Will treat as custom header.", name);
                 HeaderName::CustomHeader(String::from(name))
             }
+        }
+    }
+}
+
+impl fmt::Display for HeaderValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            HeaderValue::Str(ref s) => write!(f, "{}", s),
+            HeaderValue::Num(ref n) => write!(f, "{}", n)
         }
     }
 }

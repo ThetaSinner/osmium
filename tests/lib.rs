@@ -28,7 +28,7 @@ use std::str;
 use curl::easy::Easy;
 
 // osmium
-use osmium::http::{request, response, server, handler};
+use osmium::http::{request, response, server, handler, status, header};
 
 #[test]
 fn empty_request() {
@@ -42,8 +42,16 @@ fn empty_request() {
         impl handler::Handler for MyHandler {
             fn process(&self, req: request::Request) -> response::Response {
                 debug!("Responding to request: {:?}", req);
+
+                let mut headers = header::Headers::new();
+                headers.add(header::HeaderName::CustomHeader("Server".to_owned()), header::HeaderValue::Str("Osmium".to_owned()));
+                headers.add(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
+
                 response::Response {
-                    version: req.version
+                    version: req.version,
+                    status: status::HttpStatus::Ok,
+                    headers: headers,
+                    body: None
                 }
             }
         }
@@ -59,6 +67,7 @@ fn empty_request() {
         handle.show_header(true).unwrap();
         let mut transfer = handle.transfer();
         transfer.write_function(|new_data| {
+            trace!("Reading response line: [{:?}]", new_data);
             response.extend_from_slice(new_data);
             Ok(new_data.len())
         }).unwrap();
@@ -66,6 +75,6 @@ fn empty_request() {
         transfer.perform().unwrap();
     }
 
-    assert_eq!(response.len(), 50);
-    assert_eq!(str::from_utf8(response.as_slice()).unwrap(), "HTTP/1.1 OK\r\nServer: Osmium\r\nContent-Length: 0\r\n\r\n");
+    assert_eq!(response.len(), 54);
+    assert_eq!(str::from_utf8(response.as_slice()).unwrap(), "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nServer: Osmium\r\n\r\n");
 }
