@@ -22,6 +22,7 @@ use std::fmt;
 pub enum HttpStatus {
     Ok,
     BadRequest,
+    NotFound,
     Custom(String, String)
 }
 
@@ -30,6 +31,7 @@ impl fmt::Display for HttpStatus {
         match *self {
             HttpStatus::Ok => write!(f, "200 OK"),
             HttpStatus::BadRequest => write!(f, "400 Bad Request"),
+            HttpStatus::NotFound => write!(f, "404 Not Found"),
             HttpStatus::Custom(ref code, ref phrase) => write!(f, "{} {}", code, phrase)
         }
     }
