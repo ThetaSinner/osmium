@@ -41,7 +41,7 @@ fn empty_request() {
 
         impl handler::Handler for MyHandler {
             fn process(&self, req: request::Request) -> response::Response {
-                debug!("Responding to request");
+                debug!("Responding to request: {:?}", req);
                 response::Response {
                     version: req.version
                 }

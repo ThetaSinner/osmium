@@ -34,54 +34,79 @@ pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
         return Ok(None)
     }
 
-    let response = {
-        let mut headers = [httparse::EMPTY_HEADER; 16];
-        let mut req = httparse::Request::new(&mut headers);
+    // parse the request with its headers.
+    let parse_result = parse_http(buf);
 
-        // The parse is done inside a block because of buffer ownership. Feel free to read the docs for `bytes`, `httparse` and `tokio_io` 
-        let parsing = req.parse(buf).unwrap();
-        if parsing.is_complete() {
-            let version = if let Some(v) = req.version {
-                HttpVersion::from(v)
-            }
-            else {
-                // TODO default for now.
-                HttpVersion::Http11
-            };
+    // If the result is okay then proceed by building a request object and passing it to the next stage.
+    // Otherwise comsume the buffer so we don't process this bad request again and exit.
+    if let Some(parse_result) = parse_result {
+        buf.split_to(parse_result.3);
 
-            let uri = req.path.unwrap_or("/");
+        Ok(Some(Request {
+            version: parse_result.0,
+            uri: parse_result.1,
+            headers: parse_result.2,
+            body: if buf.is_empty() {None} else {Some(String::from_utf8(buf.as_ref().to_vec()).unwrap())}
+        }))
+    }
+    else {
+        error!("Failed to parse http request");
+        // Consume all data from the buffer.
+        let len = buf.len();
+        buf.split_to(len);
 
-            let mut headers = Headers::new();
-            for req_header in req.headers.iter() {
-                let header_name = HeaderName::from(req_header.name);
-                let val = String::from_utf8(req_header.value.to_vec()).unwrap();
-                match header_name {
-                    HeaderName::ContentLength => {
-                        let val = val.parse::<i32>().unwrap();
-                        headers.add(header_name, HeaderValue::Num(val));
-                    },
-                    _ => headers.add(header_name, HeaderValue::Str(val))
-                }
-            }
+        Ok(None)
+    }
+}
 
-            info!("Request ok, proceeding.");
+fn parse_http(buf: &mut BytesMut) -> Option<(HttpVersion, String, Headers, usize)> {
+    let mut headers = [httparse::EMPTY_HEADER; 16];
+    let mut req = httparse::Request::new(&mut headers);
 
-            Some(Request {
-                version: version,
-                uri: uri.to_owned(),
-                headers: Headers::new(),
-                body: None
-            })
-        }
-        else {
-            error!("Server does not support streamed requests yet.");
-            None
-        }
+    // The parse is done inside a block because of buffer ownership. Feel free to read the docs for `bytes`, `httparse` and `tokio_io` 
+    let parsing_status = req.parse(buf).unwrap();
+
+    let bytes_read = match parsing_status {
+        httparse::Status::Complete(bytes_read) => bytes_read,
+        httparse::Status::Partial => 0,
     };
 
-    // Consume all data from the buffer.
-    let len = buf.len();
-    buf.split_to(len);
+    if bytes_read > 0 {
+        let version = if let Some(v) = req.version {
+            HttpVersion::from(v)
+        }
+        else {
+            // TODO default version, should error.
+            HttpVersion::Http11
+        };
 
-    Ok(response)
+        // TODO default path, should error.
+        let uri = req.path.unwrap_or("/");
+
+        let mut headers = Headers::new();
+        for req_header in req.headers.iter() {
+            let header_name = HeaderName::from(req_header.name);
+            let val = String::from_utf8(req_header.value.to_vec()).unwrap();
+            match header_name {
+                HeaderName::ContentLength => {
+                    let val = val.parse::<i32>().unwrap();
+                    headers.add(header_name, HeaderValue::Num(val));
+                },
+                _ => headers.add(header_name, HeaderValue::Str(val))
+            }
+        }
+
+        info!("Request ok, proceeding.");
+
+        Some((
+            version,
+            uri.to_owned(),
+            headers,
+            bytes_read
+        ))
+    }
+    else {
+        error!("Server does not support streamed requests yet.");
+        None
+    }
 }
