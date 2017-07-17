@@ -162,7 +162,6 @@ fn serve_file() {
     assert!(response_text.ends_with("\r\n\r\n<!DOCTYPE html><html><head><title>osmium</title></head><body><h1>hello world</h1></body></html>"));    
 }
 
-
 #[test]
 fn serve_file_not_found() {
     thread::spawn(move || {
