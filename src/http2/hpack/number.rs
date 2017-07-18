@@ -15,9 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+#[derive(Debug)]
 pub struct EncodedNumber {
-    prefix: u8,
-    rest: Option<Vec<u8>>
+    pub prefix: u8,
+    pub rest: Option<Vec<u8>>
 }
 
 // n here is N in the hpack encoding instructions.
@@ -138,8 +139,6 @@ mod tests {
     fn decode_for_encdode_starting_at_octet_boundary() {
         let en = encode(42, 8);
         let octets = vec!(en.prefix);
-
-        print_binary(octets[0]);
 
         let num = decode(octets, 8);
         assert_eq!(42, num);
