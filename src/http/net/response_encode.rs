@@ -36,7 +36,7 @@ pub fn encode(res: Response, buf: &mut BytesMut) {
         write!(buf, "\r\n{}: {}", name, value).unwrap();
     }
 
-    write!(buf, "\r\n\r\n");
+    write!(buf, "\r\n\r\n").unwrap();
 
     if let Some(body) = res.body {
         write!(buf, "{}", body).unwrap();
