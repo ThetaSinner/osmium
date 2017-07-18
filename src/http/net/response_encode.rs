@@ -23,7 +23,6 @@ use bytes::BytesMut;
 
 // osmium
 use http::response::Response;
-use http::header::HeaderValue;
 
 /// Convert a `Response` struct to http transport format
 ///

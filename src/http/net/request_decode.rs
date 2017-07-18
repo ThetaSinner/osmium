@@ -19,7 +19,7 @@
 use std::io;
 
 // tokio
-use bytes::{Buf, IntoBuf, BytesMut};
+use bytes::BytesMut;
 
 // osmium
 use http_version::HttpVersion;
