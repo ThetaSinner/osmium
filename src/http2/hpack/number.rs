@@ -53,6 +53,8 @@ pub fn encode(num: i32, n: u8) -> EncodedNumber {
     }
 }
 
+// TODO must reject encodings which overflow integer on decode.
+
 // octets must have length at least 1
 // n must be between 1 and 8 inclusive
 pub fn decode(octets: &[u8], n: u8) -> DecodedNumber {

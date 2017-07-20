@@ -15,7 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod number;
-pub mod string;
-pub mod table;
-pub mod context;
+use http2::hpack::table;
+
+// Notice that the static table is a reference to a single static table instance. 
+// That is, there is a single instance of the static table in the program.
+// The dynamic table belongs to this context.
+pub struct Context {
+    static_table: &'static table::Table,
+    dynamic_table: table::Table
+}
