@@ -19,3 +19,4 @@ pub mod number;
 pub mod string;
 pub mod table;
 pub mod context;
+pub mod huffman;
