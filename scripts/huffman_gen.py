@@ -343,10 +343,11 @@ def decode(huffman_string, huffman_tree):
 # The number of fast lookup tables is 1 less than the number of symbols in the given alphabet (TABLE).
 # This is the same as the number of interior nodes in the huffman tree plus the root node.
 def make_fast_tables(huffman_table, huffman_tree):
-    tables = []
+    # store a list of pairs, table headers (remainder) and bodies (the computed table)
+    table_columns = []
 
     null_table = _make_fast_table(huffman_table, huffman_tree, (0, 0))
-    tables.append(null_table)
+    table_columns.append(((0, 0), null_table))
 
     remainders = set(map(lambda row: row[2], null_table))
     finished_remainders = set((0, 0))
@@ -355,7 +356,7 @@ def make_fast_tables(huffman_table, huffman_tree):
         remainder = (remainders - finished_remainders).pop()
 
         table = _make_fast_table(huffman_table, huffman_tree, remainder)
-        tables.append(table)
+        table_columns.append((remainder, table))
 
         # add any new remainders to the remainders set
         remainders |= set(map(lambda row: row[2], table))
@@ -363,7 +364,30 @@ def make_fast_tables(huffman_table, huffman_tree):
         # add the remainder which was just processed to the finished set
         finished_remainders.add(remainder)
 
-    return tables
+    # fetch all remainders (column headers) from the table columns, and make sure they are unique.
+    # then convert them back to a list so they are indexed.
+    all_remainders = list(set(map(lambda column: column[0], table_columns)))
+
+    check = list(map(lambda column: column[0], table_columns))
+    cdict = {}
+    for c in check:
+        if c in cdict:
+            cdict[c] += 1
+        else:
+            cdict[c] = 1
+
+    cdict = {key: value for key, value in cdict.items() if value > 1}
+
+    # well there's the problem, (0, 0) is captured twice, work out why and fix the loop above.
+    print(cdict)
+    
+
+    print("there are", len(all_remainders), "remainders")
+
+    # TODO map indexes onto the table bodies in place of the remainders
+    # and remove the first value in the tuple, it's not needed for lookup if the whole table is flattened to an array.
+
+    return table_columns
 
 
 # remainder is a 2-tuple with a remainder value from a previous table and the number of bits in the value.
@@ -372,12 +396,17 @@ def _make_fast_table(table, huffman_tree, remainder):
 
     working_root_node = huffman_tree
 
+    print("processing table for remainder", remainder)
+
+    remainder_path = []
     # move to the node in the tree indicated by the remainder
     for bit_number in range(remainder[1] - 1, -1, -1):
         if remainder[0] & (1 << bit_number) == 1 << bit_number:
             working_root_node = working_root_node.right
+            remainder_path.append(1)
         else:
             working_root_node = working_root_node.left
+            remainder_path.append(0)
 
         # If the bit pattern in the remainder can be decoded to a symbol then it should have happened
         # in a previous table, so this is an error.
@@ -385,32 +414,42 @@ def _make_fast_table(table, huffman_tree, remainder):
             print(remainder)
             raise Exception("Unexpected value while processing remainder for fast table")
 
+    print("using remainder path", remainder_path)
+
     for i in range(0, 256):
         emit = ""
 
         working_node = working_root_node
         last_bit_number = 8
+
+        path = remainder_path.copy()
         
         for bit_number in range(7, -1, -1):
             if i & (1 << bit_number) == 1 << bit_number:
                 working_node = working_node.right
+                path.append(1)
             else:
                 working_node = working_node.left
+                path.append(0)
 
             if working_node.val != None:
                 emit += chr(working_node.val)
                 working_node = huffman_tree
                 last_bit_number = bit_number
+                path = []
 
         key = (remainder[0] << 8) + i
         rem_value = i & ((1 << last_bit_number) - 1)
 
+        # the remainder value and length need not point to a table (i.e. be between 0 and 255 in this case)
+        # it is just a bit pattern, to which we should assign an index, and later map that index into each table.
+
+        # we have not emitted anything, which means that the remainder and this current bit pattern yielded nothing
+        # the bit pattern in the remainder should therefore include the previous remainder
         if not emit:
-            # we haven't been able to find any matches on the remainder followed by this bit pattern
-            # so we forward the remainder with this bit pattern as a new remainder
             rem_value += remainder[0] << 8
             last_bit_number += remainder[1]
-        
+
         output.append((key, emit, (rem_value, last_bit_number)))
 
     return output
@@ -419,6 +458,32 @@ def _make_fast_table(table, huffman_tree, remainder):
 def fast_decode():
     pass
     
+
+from collections import deque
+def list_internal_node_paths(huffman_tree):
+    internal_node_paths = []
+
+    # do a breadth first traversal of the huffman tree
+    queue = deque()
+    queue.append((huffman_tree, []))
+    while queue:
+        (node, path) = queue.popleft()
+
+        if node.val == None:
+            internal_node_paths.append(path)
+
+        if node.left != None:
+            new_path = path.copy()
+            new_path.append(0)
+            queue.append((node.left, new_path))
+
+        if node.right != None:
+            new_path = path.copy()
+            new_path.append(1)
+            queue.append((node.right, new_path))
+    
+    return internal_node_paths
+
 
 def print_fast_table(table):
     for row in table:
@@ -438,7 +503,8 @@ else:
     print("Decoder is not okay")
 
 fast_tables = make_fast_tables(TABLE, huffman_tree)
-#assert 256 == len(fast_tables)
+print(len(fast_tables))
+assert 256 == len(fast_tables)
 
 print_fast_table(fast_tables[1])
 
