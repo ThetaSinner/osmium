@@ -93,6 +93,12 @@ pub fn decode(huffman_string: &[u8]) -> String {
             output.push((data >> (i * 8)) as u8);
         }
     }
+
+    // TODO an interesting side effect of generating the fast lookup tables is that any sequence of bytes will be considered
+    // valid. Detecting 'invalid' encodings therefore cannot be done here (without modifying the tables?). 
+    // There is also no associated output length with the string to decode, only the number of input bytes will be on an
+    // hpack string representation. Therefore, for now, just assume that this correctly decodes the request and come
+    // and look at this code if there are ever problems.
     
     String::from_utf8(output).unwrap()
 }
