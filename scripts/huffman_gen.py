@@ -401,7 +401,7 @@ def _make_fast_table(table, huffman_tree, remainder):
             raise Exception("Unexpected value while processing remainder for fast table")
 
     for i in range(0, 256):
-        emit = ""
+        emit = []
 
         working_node = working_root_node
         last_bit_number = 8
@@ -413,7 +413,7 @@ def _make_fast_table(table, huffman_tree, remainder):
                 working_node = working_node.left
 
             if working_node.val != None:
-                emit += chr(working_node.val)
+                emit.append(working_node.val)
                 working_node = huffman_tree
                 last_bit_number = bit_number
 
@@ -440,25 +440,31 @@ def fast_decode(huffman_coded_string, fast_lookup):
     for octet in huffman_coded_string:
         # note that each 'colummn' has length 2**8
         data, next_table = fast_lookup[next_table * 256 + octet]
-        output += data
+        output += byte_list_to_string(data)
 
     return output
 
 
-def dump_fast_tables_as_static_rust_definition(fast_tables, file):
-    output = "static LOOKUP: [(&str, usize); {}] = [\r\n".format(len(fast_tables))
+def byte_list_to_string(byte_list):
+    string = ""
+    for byte in byte_list:
+        string += chr(byte)
 
-    translator = str.maketrans({
-        "\r": r"\r",
-        "\n": r"\n",
-        "\"": r"\"",
-        "\'": r"\'",
-        "\\": r"\\"
-    })
+    return string
+
+
+def dump_fast_tables_as_static_rust_definition(fast_tables, file):
+    output = "static LOOKUP: [((u32, u32), usize); {}] = [\r\n".format(len(fast_tables))
 
     for data, next_table in fast_tables:
-        data = data.translate(translator)
-        output += "    (\"{}\", {}),\r\n".format(data, next_table)
+        # formats with square brackets which we want to remove.
+        data_as_u32 = 0
+        shift = 0
+        while data:
+            data_as_u32 += data.pop() << (shift * 8)
+            shift += 1
+
+        output += "    (({}, {}), {}),\r\n".format(data_as_u32, shift, next_table)
 
     output += "];\r\n"
 

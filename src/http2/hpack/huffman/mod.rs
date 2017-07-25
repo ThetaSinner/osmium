@@ -80,16 +80,21 @@ pub fn encode(string: &str) -> Vec<u8> {
 }
 
 pub fn decode(huffman_string: &[u8]) -> String {
-    let mut output = String::new();
+    let mut output = Vec::new();
 
     let mut next_table = 0;
     for &octet in huffman_string {
-        let (data, _next_table) = data::LOOKUP[next_table * 256 + octet as usize];
+        let ((data, num_octets), _next_table) = data::LOOKUP[next_table * 256 + octet as usize];
         next_table = _next_table;
-        output += data;
-    }
 
-    output
+        // May I be forgiven for this. Rust's static data structures make storing this data as a list of bytes
+        // difficult, so the bytes to emit have been packed into a u32.
+        for i in (0..num_octets).rev() {
+            output.push((data >> (i * 8)) as u8);
+        }
+    }
+    
+    String::from_utf8(output).unwrap()
 }
 
 #[cfg(test)]
@@ -114,12 +119,14 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_long_string() {
-        let string = "!\"£$%^&*()_+1234567890-=qwertyuiop[]{}asdfghjkl;'#:@~zxcvbnm,./<>?QWERTYUIOPASDFGHJKLZXCVBNM\r\n\\\"'";
-        
-        let result = decode(encode(string).as_slice());
-        println!("{}", result);
-        // not quite there yet
-        //assert_eq!(string, result);
+    fn round_trip_whole_alphabet() {
+        let mut string = String::new();
+        for i in 0..256 {
+            string.push(i as u8 as char);
+        }
+
+        let result = decode(encode(string.as_ref()).as_slice());
+
+        assert_eq!(string, result);
     }
 }
