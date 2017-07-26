@@ -41,6 +41,8 @@ pub fn unpack(data: &mut [u8], context: &mut context::Context) -> UnpackedHeader
 
     let mut data_iter = data.iter_mut().peekable();
 
+    // TODO this needs to process all headers, it currently just does the first one as an example
+
     let mut peek_front = 0;
     {
         peek_front = **data_iter.peek().unwrap();

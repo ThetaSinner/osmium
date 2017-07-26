@@ -21,6 +21,7 @@ use std::iter::Peekable;
 
 // osmium
 use http2::hpack::number;
+use http2::hpack::huffman;
 
 #[derive(Debug)]
 pub struct DecodedString {
@@ -29,7 +30,7 @@ pub struct DecodedString {
 }
 
 pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
-    // TODO the length of the string should be capped.
+    // TODO the length of the string to encode should be capped.
 
     let mut length = number::encode(string.len() as u32, 7);
 
@@ -41,11 +42,19 @@ pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
         length.prefix |= 128;
     }
 
+    // encode the string length in the representation.
     let mut result = vec!(length.prefix);
     if let Some(rest) = length.rest {
         result.extend(rest);
     }
-    result.extend(string.as_bytes().to_vec());
+
+    // encode the actual string in the representation, either plain or compressed with huffman coding.
+    if use_huffman_coding {
+        result.extend(huffman::encode(string.as_str()));
+    }
+    else {
+        result.extend(string.as_bytes().to_vec());
+    }
 
     result
 }
@@ -56,22 +65,26 @@ pub fn decode(octets: &mut Peekable<IterMut<u8>>) -> DecodedString {
         use_huffman_coding = false;
     }
 
-    // TODO the huffman coding is now implemented and needs to be used here.
-    if use_huffman_coding {
-        panic!("Cannot decode Huffman encoded string");
-    }
-
     let dn = number::decode(octets, 7);
 
-    let mut str_bytes = Vec::new();
     let mut take_string = octets.take(dn.num as usize);
-    while let Some(&mut str_byte) = take_string.next() {
-        str_bytes.push(str_byte);
+    let string = if use_huffman_coding {
+        // this is horrible... really nasty.
+        let taken: Vec<u8> = take_string.map(|&mut x| {x}).collect();
+        huffman::decode(taken.as_slice())
     }
+    else {
+        let mut str_bytes = Vec::new();
+        while let Some(&mut str_byte) = take_string.next() {
+            str_bytes.push(str_byte);
+        }
+
+        String::from_utf8(str_bytes).unwrap()
+    };
 
     DecodedString {
         octets_read: dn.octets_read + dn.num as usize,
-        string: String::from_utf8(str_bytes).unwrap()
+        string: string
     }
 }
 
@@ -100,6 +113,15 @@ mod tests {
         let ds = decode(&mut es.iter_mut().peekable());
         assert_eq!(14, ds.octets_read);
         assert_eq!("Hello, World!", ds.string);
+    }
+
+    #[test]
+    fn round_trip_huffman_hello_world() {
+        let mut result = encode("Hello, World!".to_owned(), true);
+
+        let original = decode(&mut result.iter_mut().peekable());
+
+        assert_eq!("Hello, World!", original.string);
     }
 
     #[test]
