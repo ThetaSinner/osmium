@@ -35,7 +35,7 @@ pub enum HeaderValue {
 }
 
 #[derive(Debug)]
-pub struct Header(HeaderName, HeaderValue);
+pub struct Header(pub HeaderName, pub HeaderValue);
 
 #[derive(Debug)]
 pub struct Headers {

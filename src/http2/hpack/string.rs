@@ -15,12 +15,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// std
+use std::slice::Iter;
+
+// osmium
 use http2::hpack::number;
 
 #[derive(Debug)]
 pub struct DecodedString {
     pub string: String,
-    pub octets_read: i32
+    pub octets_read: usize
 }
 
 pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
@@ -43,21 +47,28 @@ pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
     result
 }
 
-pub fn decode(octets: &[u8]) -> DecodedString {
+pub fn decode(octets: &mut Iter<u8>) -> DecodedString {
     let mut use_huffman_coding = true;
-    if octets[0] & 128 == 0 {
+    if **octets.peekable().peek().unwrap() & 128 == 0 {
         use_huffman_coding = false;
     }
 
+    // TODO the huffman coding is now implemented and needs to be used here.
     if use_huffman_coding {
         panic!("Cannot decode Huffman encoded string");
     }
 
-    let dn = number::decode(&octets, 7);
+    let dn = number::decode(octets, 7);
+
+    let mut str_bytes = Vec::new();
+    let mut take_string = octets.take(dn.octets_read);
+    while let Some(&str_byte) = take_string.next() {
+        str_bytes.push(str_byte);
+    }
 
     DecodedString {
-        string: String::from_utf8(octets[dn.octets_read as usize .. (dn.octets_read+dn.num) as usize].to_vec()).unwrap(),
-        octets_read: dn.octets_read + dn.num
+        octets_read: dn.octets_read + str_bytes.len(),
+        string: String::from_utf8(str_bytes).unwrap()
     }
 }
 

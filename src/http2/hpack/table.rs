@@ -21,9 +21,10 @@ use std::collections::VecDeque;
 // osmium
 use http2::header;
 
+#[derive(Clone, Debug)]
 pub struct Field {
-    name: String,
-    value: String
+    pub name: String,
+    pub value: String
 }
 
 // TODO the hpack spec sugggests storing strings, then using pointers to those strings and counting references,

@@ -15,6 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// std
+use std::slice::Iter;
+
 #[derive(Debug)]
 pub struct EncodedNumber {
     pub prefix: u8,
@@ -24,7 +27,7 @@ pub struct EncodedNumber {
 #[derive(Debug)]
 pub struct DecodedNumber {
     pub num: i32,
-    pub octets_read: i32
+    pub octets_read: usize
 }
 
 // n here is N in the hpack encoding instructions.
@@ -57,9 +60,9 @@ pub fn encode(num: i32, n: u8) -> EncodedNumber {
 
 // octets must have length at least 1
 // n must be between 1 and 8 inclusive
-pub fn decode(octets: &[u8], n: u8) -> DecodedNumber {
+pub fn decode(octets: &mut Iter<u8>, n: u8) -> DecodedNumber {
     // turn off bits which should not be checked.
-    let mut num = (octets[0] & (255 >> (8 - n))) as i32;
+    let mut num = (octets.next().unwrap() & (255 >> (8 - n))) as i32;
     if num < (1 << n) - 1 {
         return DecodedNumber {
             num: num,
@@ -71,9 +74,7 @@ pub fn decode(octets: &[u8], n: u8) -> DecodedNumber {
     let mut octets_read = 1;
 
     let mut m = 0;
-    for i in 1..octets.len() {
-        let octet = octets[i];
-
+    while let Some(octet) = octets.next() {
         num = num + (octet & 127) as i32 * (1 << m);
         m = m + 7;
 

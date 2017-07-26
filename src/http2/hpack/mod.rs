@@ -20,3 +20,4 @@ pub mod string;
 pub mod table;
 pub mod context;
 pub mod huffman;
+pub mod unpack;
