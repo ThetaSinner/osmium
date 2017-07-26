@@ -36,10 +36,22 @@ pub struct Table {
     /// Number of octets in `fields`
     size: usize,
     /// Maximmum number of octets to store in 'fields'
-    max_size: usize
+    max_size: usize,
+    /// The maximum size that max_size may be set to
+    // TOOD this is not respected
+    max_size_setting: usize
 }
 
 impl Table {
+    pub fn new(max_size_setting: usize) -> Self {
+        Table {
+            fields: VecDeque::new(),
+            size: 0,
+            max_size: max_size_setting,
+            max_size_setting: max_size_setting
+        }
+    }
+
     pub fn push_front(&mut self, field: Field) {
         let storage_size_required = field.name.len() + field.value.len() + 32;
 
