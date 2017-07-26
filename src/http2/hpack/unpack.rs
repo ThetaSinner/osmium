@@ -30,36 +30,40 @@ static SIZE_UPDATE_FLAG: u8 = 0x20;
 
 pub struct UnpackedHeaders {
     pub headers: header::Headers,
-    pub octets_read: u32
+    pub octets_read: usize
 }
 
-pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
+pub fn unpack(data: &mut [u8], context: &mut context::Context) -> UnpackedHeaders {
     let mut unpacked_headers = UnpackedHeaders {
         headers: header::Headers::new(),
         octets_read: 0
     };
 
-    let data_iter = data.iter();
+    let mut data_iter = data.iter_mut().peekable();
 
+    let mut peek_front = 0;
+    {
+        peek_front = **data_iter.peek().unwrap();
+    }
     // TODO a 0 in the MSB with an indexed header representation is an error, check for that after checking for other representations?
     // unfortunately that would mean decoding the number and making sure there are no strings after it otherise that'd be another representation...
-    if data[0] & INDEXED_HEADER_FLAG == INDEXED_HEADER_FLAG {
-        let decoded_number = number::decode(&data_iter, 7);
-        unpacked_headers.octets_read += 1 + decoded_number.bits_read;
+    if peek_front & INDEXED_HEADER_FLAG == INDEXED_HEADER_FLAG {
+        let decoded_number = number::decode(&mut data_iter, 7);
+        unpacked_headers.octets_read += decoded_number.octets_read;
 
-        let field = context.get(decoded_number.num).unwrap();
+        let field = context.get(decoded_number.num as usize).unwrap().clone();
 
         unpacked_headers.headers.add_header(header::Header::from(field));
     }
-    else if data[0] & INDEXED_HEADER_FLAG == INDEXED_HEADER_FLAG {
-        let decoded_number = number::decode(&data_iter, 6);
-        unpacked_headers.octets_read += 2 + decoded_number.bits_read;
+    else if peek_front & INDEXED_HEADER_FLAG == INDEXED_HEADER_FLAG {
+        let decoded_number = number::decode(&mut data_iter, 6);
+        unpacked_headers.octets_read += decoded_number.octets_read;
 
         // Note that headers are indexed from 1, so a zero value here means the name is not indexed.
-        if decoded_number.num {
-            let mut field = context.get(decoded_number.num).unwrap();
+        if decoded_number.num != 0 {
+            let mut field = context.get(decoded_number.num as usize).unwrap().clone();
 
-            let decoded_string = string::decode(&data_iter);
+            let decoded_string = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_string.octets_read;
             // the header is indexed but we want to use the value from the packed header.
             field.value = decoded_string.string;
@@ -70,15 +74,15 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
         else {
-            let decoded_name = string::decode(&data_iter);
+            let decoded_name = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_name.octets_read;
 
-            let decoded_value = string::decode(&data_iter);
+            let decoded_value = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_value.octets_read;
 
             let field = table::Field {
-                name: decoded_name,
-                value: decoded_value
+                name: decoded_name.string,
+                value: decoded_value.string
             };
 
             // this representation causes the field to be added to the dynamic table.
@@ -87,15 +91,15 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
     }
-    else if data[0] & LITERAL_WITHOUT_INDEXING_FLAG == 0 {
-        let decoded_number = number::decode(&data_iter, 4);
-        unpacked_headers.octets_read += 2 + decoded_number.bits_read;
+    else if peek_front & LITERAL_WITHOUT_INDEXING_FLAG == 0 {
+        let decoded_number = number::decode(&mut data_iter, 4);
+        unpacked_headers.octets_read += decoded_number.octets_read;
 
         // Note that headers are indexed from 1, so a zero value here means the name is not indexed.
-        if decoded_number.num {
-            let mut field = context.get(decoded_number.num).unwrap();
+        if decoded_number.num != 0 {
+            let mut field = context.get(decoded_number.num as usize).unwrap().clone();
 
-            let decoded_string = string::decode(&data_iter);
+            let decoded_string = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_string.octets_read;
             // the header is indexed but we want to use the value from the packed header.
             field.value = decoded_string.string;
@@ -103,31 +107,31 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
         else {
-            let decoded_name = string::decode(&data_iter);
+            let decoded_name = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_name.octets_read;
 
-            let decoded_value = string::decode(&data_iter);
+            let decoded_value = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_value.octets_read;
 
             let field = table::Field {
-                name: decoded_name,
-                value: decoded_value
+                name: decoded_name.string,
+                value: decoded_value.string
             };
 
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
     }
-    else if data[0] & LITERAL_NEVER_INDEX_FLAG == LITERAL_NEVER_INDEX_FLAG {
+    else if peek_front & LITERAL_NEVER_INDEX_FLAG == LITERAL_NEVER_INDEX_FLAG {
         // TODO the output header needs to be marked, because the server is responsible for propogating the never index flag.
 
-        let decoded_number = number::decode(&data_iter, 4);
-        unpacked_headers.octets_read += 2 + decoded_number.bits_read;
+        let decoded_number = number::decode(&mut data_iter, 4);
+        unpacked_headers.octets_read += 2 + decoded_number.octets_read;
 
         // Note that headers are indexed from 1, so a zero value here means the name is not indexed.
-        if decoded_number.num {
-            let mut field = context.get(decoded_number.num).unwrap();
+        if decoded_number.num != 0 {
+            let mut field = context.get(decoded_number.num as usize).unwrap().clone();
 
-            let decoded_string = string::decode(&data_iter);
+            let decoded_string = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_string.octets_read;
             // the header is indexed but we want to use the value from the packed header.
             field.value = decoded_string.string;
@@ -135,37 +139,39 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
         else {
-            let decoded_name = string::decode(&data_iter);
+            let decoded_name = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_name.octets_read;
 
-            let decoded_value = string::decode(&data_iter);
+            let decoded_value = string::decode(&mut data_iter);
             unpacked_headers.octets_read += decoded_value.octets_read;
 
             let field = table::Field {
-                name: decoded_name,
-                value: decoded_value
+                name: decoded_name.string,
+                value: decoded_value.string
             };
 
             unpacked_headers.headers.add_header(header::Header::from(field));
         }
     }
-    else if data[0] & SIZE_UPDATE_FLAG == SIZE_UPDATE_FLAG {
-        let decoded_number = number::decode(&data_iter, 5);
+    else if peek_front & SIZE_UPDATE_FLAG == SIZE_UPDATE_FLAG {
+        let decoded_number = number::decode(&mut data_iter, 5);
         unpacked_headers.octets_read += decoded_number.octets_read;
 
         // TODO the new value must be below the maximum specified by the protocol using hpack, in this case http2
         // as this is being written first it will have to be modified once http2 settings can be decoded in the http2 module.
 
-        context.set_max_size(decoded_number.num);
+        context.set_max_size(decoded_number.num as usize);
     }
+
+    unpacked_headers
 }
 
 impl From<table::Field> for header::Header {
     fn from(field: table::Field) -> Self {
-        let header_name = header::HeaderName::from(field.name);
+        let header_name = header::HeaderName::from(field.name.as_ref());
 
         header::Header (
-            header_name, 
+            header_name.clone(), 
             match header_name {
                 // TODO map types which should be numbers etc.
                 _ => header::HeaderValue::Str(field.value)

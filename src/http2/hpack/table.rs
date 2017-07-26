@@ -18,9 +18,6 @@
 // std
 use std::collections::VecDeque;
 
-// osmium
-use http2::header;
-
 #[derive(Clone, Debug)]
 pub struct Field {
     pub name: String,

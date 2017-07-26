@@ -16,7 +16,8 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // std
-use std::slice::Iter;
+use std::slice::IterMut;
+use std::iter::Peekable;
 
 #[derive(Debug)]
 pub struct EncodedNumber {
@@ -26,13 +27,16 @@ pub struct EncodedNumber {
 
 #[derive(Debug)]
 pub struct DecodedNumber {
-    pub num: i32,
+    pub num: u32,
     pub octets_read: usize
 }
 
+// TODO is u32 the right type to use? probably want to allow number to get as big as they can before they're capped.
+// maybe use usize instead?
+
 // n here is N in the hpack encoding instructions.
 // n must lie between 1 and 8 inclusive
-pub fn encode(num: i32, n: u8) -> EncodedNumber {
+pub fn encode(num: u32, n: u8) -> EncodedNumber {
     if num < (1 << n) - 1 {
         return EncodedNumber {
             prefix: num as u8,
@@ -60,9 +64,9 @@ pub fn encode(num: i32, n: u8) -> EncodedNumber {
 
 // octets must have length at least 1
 // n must be between 1 and 8 inclusive
-pub fn decode(octets: &mut Iter<u8>, n: u8) -> DecodedNumber {
+pub fn decode(octets: &mut Peekable<IterMut<u8>>, n: u8) -> DecodedNumber {
     // turn off bits which should not be checked.
-    let mut num = (octets.next().unwrap() & (255 >> (8 - n))) as i32;
+    let mut num = (*octets.next().unwrap() & (255 >> (8 - n))) as u32;
     if num < (1 << n) - 1 {
         return DecodedNumber {
             num: num,
@@ -74,11 +78,13 @@ pub fn decode(octets: &mut Iter<u8>, n: u8) -> DecodedNumber {
     let mut octets_read = 1;
 
     let mut m = 0;
-    while let Some(octet) = octets.next() {
-        num = num + (octet & 127) as i32 * (1 << m);
+    while let Some(&&mut octet) = octets.peek() {
+        num = num + (octet & 127) as u32 * (1 << m);
         m = m + 7;
 
         octets_read += 1;
+
+        octets.next();
 
         if octet & 128 != 128 {break;}
     }
@@ -116,18 +122,18 @@ mod tests {
     }
 
     #[test]
-    fn decode_for_encdode_in_prefix() {
+    fn decode_prefix_only() {
         let en = encode(10, 5);
-        let octets = vec!(en.prefix);
+        let mut octets = vec!(en.prefix);
 
-        let dn = decode(&octets, 5);
+        let dn = decode(&mut octets.iter_mut().peekable(), 5);
         assert_eq!(1, dn.octets_read);
         assert_eq!(10, dn.num);
     }
 
     // See example C.1.2 of hpack instructions.
     #[test]
-    fn encdode_using_rest() {
+    fn encode_using_rest() {
         let en = encode(1337, 5);
 
         assert_eq!(31, en.prefix);
@@ -138,19 +144,19 @@ mod tests {
     }
 
     #[test]
-    fn decode_for_encdode_using_rest() {
+    fn decode_using_rest() {
         let en = encode(1337, 5);
         let mut octets = vec!(en.prefix);
         octets.extend(en.rest.unwrap());
 
-        let de = decode(&octets, 5);
+        let de = decode(&mut octets.iter_mut().peekable(), 5);
         assert_eq!(3, de.octets_read);
         assert_eq!(1337, de.num);
     }
 
     // See example C.1.3 of hpack instructions.
     #[test]
-    fn encdode_starting_at_octet_boundary() {
+    fn encode_starting_at_octet_boundary() {
         let en = encode(42, 8);
 
         assert_eq!(42, en.prefix);
@@ -158,11 +164,11 @@ mod tests {
     }
 
     #[test]
-    fn decode_for_encdode_starting_at_octet_boundary() {
+    fn decode_starting_at_octet_boundary() {
         let en = encode(42, 8);
-        let octets = vec!(en.prefix);
+        let mut octets = vec!(en.prefix);
 
-        let dn = decode(&octets, 8);
+        let dn = decode(&mut octets.iter_mut().peekable(), 8);
         assert_eq!(1, dn.octets_read);
         assert_eq!(42, dn.num);
     }

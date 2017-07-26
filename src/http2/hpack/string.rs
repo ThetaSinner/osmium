@@ -16,7 +16,8 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // std
-use std::slice::Iter;
+use std::slice::IterMut;
+use std::iter::Peekable;
 
 // osmium
 use http2::hpack::number;
@@ -28,7 +29,9 @@ pub struct DecodedString {
 }
 
 pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
-    let mut length = number::encode(string.len() as i32, 7);
+    // TODO the length of the string should be capped.
+
+    let mut length = number::encode(string.len() as u32, 7);
 
     // As the string length only uses the first 7 bits of its prefix
     // we can use the 8th bit as a flag for Huffman coding.
@@ -47,9 +50,9 @@ pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
     result
 }
 
-pub fn decode(octets: &mut Iter<u8>) -> DecodedString {
+pub fn decode(octets: &mut Peekable<IterMut<u8>>) -> DecodedString {
     let mut use_huffman_coding = true;
-    if **octets.peekable().peek().unwrap() & 128 == 0 {
+    if **octets.peek().unwrap() & 128 == 0 {
         use_huffman_coding = false;
     }
 
@@ -61,13 +64,13 @@ pub fn decode(octets: &mut Iter<u8>) -> DecodedString {
     let dn = number::decode(octets, 7);
 
     let mut str_bytes = Vec::new();
-    let mut take_string = octets.take(dn.octets_read);
-    while let Some(&str_byte) = take_string.next() {
+    let mut take_string = octets.take(dn.num as usize);
+    while let Some(&mut str_byte) = take_string.next() {
         str_bytes.push(str_byte);
     }
 
     DecodedString {
-        octets_read: dn.octets_read + str_bytes.len(),
+        octets_read: dn.octets_read + dn.num as usize,
         string: String::from_utf8(str_bytes).unwrap()
     }
 }
@@ -91,10 +94,10 @@ mod tests {
     }
 
     #[test]
-    fn decode_for_encode_hello_world() {
-        let es = encode("Hello, World!".to_owned(), false);
+    fn decode_hello_world() {
+        let mut es = encode("Hello, World!".to_owned(), false);
 
-        let ds = decode(es.as_slice());
+        let ds = decode(&mut es.iter_mut().peekable());
         assert_eq!(14, ds.octets_read);
         assert_eq!("Hello, World!", ds.string);
     }
@@ -104,7 +107,6 @@ mod tests {
         let test_string = "this is an excessively long string which overflows the prefix, to check that the 'rest' length bytes are included in the string encoding".to_owned();
         let result = encode(test_string.to_owned(), false);
 
-
         // assert the total length of the string encoding
         assert_eq!(138, result.len());
         
@@ -112,20 +114,20 @@ mod tests {
         assert!(result[0] & 128 == 0);
 
         // assert the string length encoding
-        let dn = number::decode(&vec!(result[0], result[1]), 7);
+        let dn = number::decode(&mut vec!(result[0], result[1]).iter_mut().peekable(), 7);
         assert_eq!(2, dn.octets_read);
-        assert_eq!(test_string.len() as i32, dn.num);
+        assert_eq!(test_string.len(), dn.num as usize);
 
         // assert the string
         assert_eq!(test_string, String::from_utf8(result[2..].to_vec()).unwrap());
     }
 
     #[test]
-    fn decode_for_encode_string_which_has_length_encoding_too_long_for_prefix() {
+    fn decode_string_which_has_length_encoding_too_long_for_prefix() {
         let test_string = "this is an excessively long string which overflows the prefix, to check that the 'rest' length bytes are included in the string encoding".to_owned();
-        let es = encode(test_string.to_owned(), false);
+        let mut es = encode(test_string.to_owned(), false);
 
-        let ds = decode(es.as_slice());
+        let ds = decode(&mut es.iter_mut().peekable());
         assert_eq!(2 + test_string.len(), ds.octets_read as usize);
         assert_eq!(test_string, ds.string);
     }
