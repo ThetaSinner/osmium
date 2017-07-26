@@ -16,3 +16,4 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 mod hpack;
+pub mod header;

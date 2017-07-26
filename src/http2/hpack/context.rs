@@ -16,6 +16,7 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 use http2::hpack::table;
+use http2::hpack::table::Field;
 
 // Notice that the static table is a reference to a single static table instance. 
 // That is, there is a single instance of the static table in the program.
@@ -23,4 +24,34 @@ use http2::hpack::table;
 pub struct Context {
     static_table: &'static table::Table,
     dynamic_table: table::Table
+}
+
+impl Context {
+    pub fn insert(&mut self, field: Field) {
+        self.dynamic_table.push_front(field);
+    }
+
+    pub fn get(&self, index: usize) -> Option<Field> {
+        if index < self.static_table.len() {
+            self.static_table.get(index)
+        }
+        else {
+            self.dynamic_table.get(index)
+        }
+    }
+
+    pub fn find_field(&self, field: Field) -> Option<(usize, bool)> {
+        let opt_index = self.static_table.find_field(field);
+
+        if let Some((_, true)) = opt_index {
+            opt_index
+        }
+        else {
+            self.dynamic_table.find_field(field)
+        }
+    }
+
+    pub fn set_max_size(&mut self, max_size: usize) {
+        self.dynamic_table.set_max_size(max_size);
+    }
 }

@@ -18,6 +18,9 @@
 // std
 use std::collections::VecDeque;
 
+// osmium
+use http2::header;
+
 pub struct Field {
     name: String,
     value: String
@@ -112,5 +115,19 @@ impl Table {
 
             self.size -= popped.name.len() + popped.value.len() + 32;
         }
+    }
+}
+
+impl From<Field> for header::Header {
+    fn from(field: Field) -> Self {
+        let header_name = header::HeaderName::from(field.name);
+
+        header::Header (
+            header_name, 
+            match header_name {
+                // TODO map types which should be numbers etc.
+                _ => header::HeaderValue::Str(field.value)
+            }
+        )
     }
 }
