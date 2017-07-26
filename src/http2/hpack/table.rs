@@ -73,6 +73,10 @@ impl Table {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
     // returns optional, if some then a tuple. The first item is the index, the second item 
     // is a boolean indicating whether the input field matched the returned index with name and value (true)
     // or just name (false)
@@ -115,19 +119,5 @@ impl Table {
 
             self.size -= popped.name.len() + popped.value.len() + 32;
         }
-    }
-}
-
-impl From<Field> for header::Header {
-    fn from(field: Field) -> Self {
-        let header_name = header::HeaderName::from(field.name);
-
-        header::Header (
-            header_name, 
-            match header_name {
-                // TODO map types which should be numbers etc.
-                _ => header::HeaderValue::Str(field.value)
-            }
-        )
     }
 }

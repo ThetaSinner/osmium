@@ -17,10 +17,10 @@
 
 // std
 use std::collections::HashMap;
-use std::vec;
 use std::fmt;
+use std::slice;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum HeaderName {
     ContentLength,
     Host,
@@ -39,7 +39,7 @@ pub struct Header(HeaderName, HeaderValue);
 
 #[derive(Debug)]
 pub struct Headers {
-    lookup_map: HashMap<String, HeaderValue>,
+    lookup_map: HashMap<String, usize>,
     headers: Vec<Header>
 }
 
@@ -52,27 +52,27 @@ impl Headers {
     }
 
     pub fn add_header(&mut self, header: Header) {
+        self.lookup_map.insert(String::from(header.0.clone()), self.headers.len());
         self.headers.push(header);
-        self.lookup_map.insert(String::from(header.0), self.headers.len() - 1);
     }
 
     pub fn add(&mut self, name: HeaderName, value: HeaderValue) {
+        self.lookup_map.insert(String::from(name.clone()), self.headers.len());
         self.headers.push(Header(name, value));
-        self.lookup_map.insert(String::from(name), self.headers.len() - 1);
     }
 
-    pub fn get(&self, name: HeaderName) -> Option<HeaderValue> {
-        let opt_index = self.lookup_map.get(String::from(name));
+    // pub fn get(&self, name: HeaderName) -> Option<&HeaderValue> {
+    //     let opt_index = self.lookup_map.get(&String::from(name));
 
-        if let Some(index) = opt_index {
-            self.headers.get(index)
-        }
-        else {
-            None
-        }
-    }
+    //     if let Some(&index) = opt_index {
+    //         self.headers.get(index)
+    //     }
+    //     else {
+    //         None
+    //     }
+    // }
 
-    pub fn iter(&self) -> () {
+    pub fn iter(&self) -> slice::Iter<Header> {
         self.headers.iter()
     }
 }

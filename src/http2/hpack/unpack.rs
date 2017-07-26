@@ -43,3 +43,17 @@ fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
         unpacked_headers.octets_read += 1 + decoded_number.bits_read;
     }
 }
+
+impl From<Field> for header::Header {
+    fn from(field: Field) -> Self {
+        let header_name = header::HeaderName::from(field.name);
+
+        header::Header (
+            header_name, 
+            match header_name {
+                // TODO map types which should be numbers etc.
+                _ => header::HeaderValue::Str(field.value)
+            }
+        )
+    }
+}

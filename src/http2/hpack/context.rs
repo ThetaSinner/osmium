@@ -31,7 +31,7 @@ impl Context {
         self.dynamic_table.push_front(field);
     }
 
-    pub fn get(&self, index: usize) -> Option<Field> {
+    pub fn get(&self, index: usize) -> Option<&Field> {
         if index < self.static_table.len() {
             self.static_table.get(index)
         }
@@ -40,7 +40,7 @@ impl Context {
         }
     }
 
-    pub fn find_field(&self, field: Field) -> Option<(usize, bool)> {
+    pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let opt_index = self.static_table.find_field(field);
 
         if let Some((_, true)) = opt_index {
