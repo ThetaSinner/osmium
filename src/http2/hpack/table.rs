@@ -43,16 +43,17 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(max_size_setting: usize) -> Self {
+    pub fn new() -> Self {
         Table {
             fields: VecDeque::new(),
             size: 0,
-            max_size: max_size_setting,
-            max_size_setting: max_size_setting
+            max_size: 51200, // for now allocate the hardcoded max allowed size setting
+            max_size_setting: 512000 // 64kB
         }
     }
 
     pub fn push_front(&mut self, field: Field) {
+        // TODO this is mixing bit length and byte length, need the number of bits used in the strings.
         let storage_size_required = field.name.len() + field.value.len() + 32;
 
         // Evict entries from the table until the new entry can be inserted without exceeding
@@ -116,6 +117,12 @@ impl Table {
     }
 
     pub fn set_max_size(&mut self, max_size: usize) {
+        // TODO handle without crash. Things like handling this error is likely to be in the http2 spec
+        // and is not included in the hpack spec as far as I know.
+        if max_size > self.max_size_setting {
+            panic!("May not set table size to greater than {}", self.max_size_setting);
+        }
+
         self.max_size = max_size;
         self.ensure_max_size(max_size)
     }

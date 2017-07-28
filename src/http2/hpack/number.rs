@@ -16,7 +16,7 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // std
-use std::slice::IterMut;
+use std::slice::Iter;
 use std::iter::Peekable;
 
 #[derive(Debug)]
@@ -64,7 +64,7 @@ pub fn encode(num: u32, n: u8) -> EncodedNumber {
 
 // octets must have length at least 1
 // n must be between 1 and 8 inclusive
-pub fn decode(octets: &mut Peekable<IterMut<u8>>, n: u8) -> DecodedNumber {
+pub fn decode(octets: &mut Peekable<Iter<u8>>, n: u8) -> DecodedNumber {
     // turn off bits which should not be checked.
     let mut num = (*octets.next().unwrap() & (255 >> (8 - n))) as u32;
     if num < (1 << n) - 1 {
@@ -78,7 +78,7 @@ pub fn decode(octets: &mut Peekable<IterMut<u8>>, n: u8) -> DecodedNumber {
     let mut octets_read = 1;
 
     let mut m = 0;
-    while let Some(&&mut octet) = octets.peek() {
+    while let Some(&octet) = octets.peek() {
         num = num + (octet & 127) as u32 * (1 << m);
         m = m + 7;
 
@@ -124,9 +124,9 @@ mod tests {
     #[test]
     fn decode_prefix_only() {
         let en = encode(10, 5);
-        let mut octets = vec!(en.prefix);
+        let octets = vec!(en.prefix);
 
-        let dn = decode(&mut octets.iter_mut().peekable(), 5);
+        let dn = decode(&mut octets.iter().peekable(), 5);
         assert_eq!(1, dn.octets_read);
         assert_eq!(10, dn.num);
     }
@@ -149,7 +149,7 @@ mod tests {
         let mut octets = vec!(en.prefix);
         octets.extend(en.rest.unwrap());
 
-        let de = decode(&mut octets.iter_mut().peekable(), 5);
+        let de = decode(&mut octets.iter().peekable(), 5);
         assert_eq!(3, de.octets_read);
         assert_eq!(1337, de.num);
     }
@@ -166,9 +166,9 @@ mod tests {
     #[test]
     fn decode_starting_at_octet_boundary() {
         let en = encode(42, 8);
-        let mut octets = vec!(en.prefix);
+        let octets = vec!(en.prefix);
 
-        let dn = decode(&mut octets.iter_mut().peekable(), 8);
+        let dn = decode(&mut octets.iter().peekable(), 8);
         assert_eq!(1, dn.octets_read);
         assert_eq!(42, dn.num);
     }

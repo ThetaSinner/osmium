@@ -21,12 +21,19 @@ use http2::hpack::table::Field;
 // Notice that the static table is a reference to a single static table instance. 
 // That is, there is a single instance of the static table in the program.
 // The dynamic table belongs to this context.
-pub struct Context {
-    static_table: &'static table::Table,
+pub struct Context<'a> {
+    static_table: &'a table::Table,
     dynamic_table: table::Table
 }
 
-impl Context {
+impl<'a> Context<'a> {
+    pub fn new(static_table: &'a table::Table) -> Self {
+        Context {
+            static_table: static_table,
+            dynamic_table: table::Table::new()
+        }
+    }
+
     pub fn insert(&mut self, field: Field) {
         self.dynamic_table.push_front(field);
     }

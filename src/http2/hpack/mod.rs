@@ -23,18 +23,20 @@ pub mod huffman;
 pub mod unpack;
 
 use self::table::{Table, Field};
+use self::context::Context;
 
 pub struct HPack {
-    /// The maximum total storage size allowed for lookup tables
-    max_table_size_setting: usize,
+    // TODO not sure this needs to be stored, and applied to every created table, it can just be hardcoded for now.
+    // The maximum total storage size allowed for lookup tables
+    //max_table_size_setting: usize,
 
     /// The single static table instance to be shared by all contexts provided by this `HPack` instance
     static_table: Table
 }
 
 impl HPack {
-    pub fn new(max_table_size_setting: usize) -> Self {
-        let mut static_table = Table::new(max_table_size_setting);
+    pub fn new() -> Self {
+        let mut static_table = Table::new();
          
         static_table.push_front(Field{name: String::from(":authority"), value: String::from("")});
         static_table.push_front(Field{name: String::from(":method"), value: String::from("GET")});
@@ -101,8 +103,11 @@ impl HPack {
         assert_eq!(61, static_table.len(), "static table should have 61 entries");
 
         HPack {
-            max_table_size_setting: max_table_size_setting,
             static_table: static_table
         }
+    }
+
+    pub fn new_context(&self) -> Context {
+        Context::new(&self.static_table)
     }
 }

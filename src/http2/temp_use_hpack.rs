@@ -15,6 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-mod hpack;
-pub mod header;
-pub mod temp_use_hpack;
+use http2::hpack;
+
+pub fn use_hpack_so_the_unused_warnings_go_away() {
+    let header_pack = hpack::HPack::new();
+
+    // let mut encoder_context = header_pack.new_context();
+    let mut decoder_context = header_pack.new_context();
+
+    hpack::unpack::unpack(Vec::new().as_slice(), &mut decoder_context);
+}
