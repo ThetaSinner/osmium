@@ -16,7 +16,6 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // std
-use std::collections::HashMap;
 use std::fmt;
 use std::slice;
 
@@ -25,6 +24,7 @@ pub enum HeaderName {
     ContentLength,
     Host,
     Accept,
+    Date,
     CustomHeader(String)
 }
 
@@ -35,42 +35,49 @@ pub enum HeaderValue {
 }
 
 #[derive(Debug)]
-pub struct Header(pub HeaderName, pub HeaderValue);
+pub struct Header {
+    pub name: HeaderName, 
+    pub value: HeaderValue,
+    allow_compression: bool
+}
+
+impl Header {
+    pub fn new(name: HeaderName, value: HeaderValue) -> Self {
+        Header {
+            name: name,
+            value: value,
+            allow_compression: true
+        }
+    }
+
+    pub fn set_allow_compression(&mut self, allow_compression: bool) {
+        self.allow_compression = allow_compression;
+    }
+
+    pub fn is_allow_compression(&self) -> bool {
+        self.allow_compression
+    }
+}
 
 #[derive(Debug)]
 pub struct Headers {
-    lookup_map: HashMap<String, usize>,
     headers: Vec<Header>
 }
 
 impl Headers {
     pub fn new() -> Self {
         Headers {
-            lookup_map: HashMap::new(),
             headers: Vec::new()
         }
     }
 
-    pub fn add_header(&mut self, header: Header) {
-        self.lookup_map.insert(String::from(header.0.clone()), self.headers.len());
+    pub fn push_header(&mut self, header: Header) {
         self.headers.push(header);
     }
 
-    pub fn add(&mut self, name: HeaderName, value: HeaderValue) {
-        self.lookup_map.insert(String::from(name.clone()), self.headers.len());
-        self.headers.push(Header(name, value));
+    pub fn push(&mut self, name: HeaderName, value: HeaderValue) {
+        self.headers.push(Header::new(name, value));
     }
-
-    // pub fn get(&self, name: HeaderName) -> Option<&HeaderValue> {
-    //     let opt_index = self.lookup_map.get(&String::from(name));
-
-    //     if let Some(&index) = opt_index {
-    //         self.headers.get(index)
-    //     }
-    //     else {
-    //         None
-    //     }
-    // }
 
     pub fn iter(&self) -> slice::Iter<Header> {
         self.headers.iter()
@@ -85,6 +92,7 @@ impl From<HeaderName> for String {
             HeaderName::ContentLength => String::from("Content-Length"),
             HeaderName::Host => String::from("Host"),
             HeaderName::Accept => String::from("Accept"),
+            HeaderName::Date => String::from("Date"),
             HeaderName::CustomHeader(v) => v
         }
     }
@@ -97,6 +105,7 @@ impl<'a> From<&'a str> for HeaderName {
             "Content-Length" => HeaderName::ContentLength,
             "Host" => HeaderName::Host,
             "Accept" => HeaderName::Accept,
+            "Date" => HeaderName::Date,
             _ => {
                 info!("Missing header conversion for [{}]. Will treat as custom header.", name);
                 HeaderName::CustomHeader(String::from(name))

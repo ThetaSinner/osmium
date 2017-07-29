@@ -52,7 +52,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
 
             let field = context.get(decoded_number.num as usize).unwrap().clone();
 
-            unpacked_headers.headers.add_header(header::Header::from(field));
+            unpacked_headers.headers.push_header(header::Header::from(field));
         }
         else if peek_front & LITERAL_WITH_INDEXING_FLAG == LITERAL_WITH_INDEXING_FLAG {
             let decoded_number = number::decode(&mut data_iter, 6);
@@ -70,7 +70,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 // this representation causes the field to be added to the dynamic table.
                 context.insert(field.clone());
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
+                unpacked_headers.headers.push_header(header::Header::from(field));
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -87,7 +87,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 // this representation causes the field to be added to the dynamic table.
                 context.insert(field.clone());
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
+                unpacked_headers.headers.push_header(header::Header::from(field));
             }
         }
         else if peek_front & LITERAL_WITHOUT_INDEXING_FLAG == 0 {
@@ -103,7 +103,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 // the header is indexed but we want to use the value from the packed header.
                 field.value = decoded_string.string;
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
+                unpacked_headers.headers.push_header(header::Header::from(field));
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -117,7 +117,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                     value: decoded_value.string
                 };
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
+                unpacked_headers.headers.push_header(header::Header::from(field));
             }
         }
         else if peek_front & LITERAL_NEVER_INDEX_FLAG == LITERAL_NEVER_INDEX_FLAG {
@@ -127,7 +127,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             unpacked_headers.octets_read += 2 + decoded_number.octets_read;
 
             // Note that headers are indexed from 1, so a zero value here means the name is not indexed.
-            if decoded_number.num != 0 {
+            let mut header = if decoded_number.num != 0 {
                 let mut field = context.get(decoded_number.num as usize).unwrap().clone();
 
                 let decoded_string = string::decode(&mut data_iter);
@@ -135,7 +135,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 // the header is indexed but we want to use the value from the packed header.
                 field.value = decoded_string.string;
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
+                header::Header::from(field)
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -149,8 +149,13 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                     value: decoded_value.string
                 };
 
-                unpacked_headers.headers.add_header(header::Header::from(field));
-            }
+                header::Header::from(field)
+            };
+
+            // the header field should never be indexed, primarily to intended to protect values which are not to
+            // be put at risk by compressing them. Therefore, set allow compression flag to false.
+            header.set_allow_compression(false);
+            unpacked_headers.headers.push_header(header);
         }
         else if peek_front & SIZE_UPDATE_FLAG == SIZE_UPDATE_FLAG {
             let decoded_number = number::decode(&mut data_iter, 5);
@@ -173,7 +178,7 @@ impl From<table::Field> for header::Header {
     fn from(field: table::Field) -> Self {
         let header_name = header::HeaderName::from(field.name.as_ref());
 
-        header::Header (
+        header::Header::new(
             header_name.clone(), 
             match header_name {
                 // TODO map types which should be numbers etc.
