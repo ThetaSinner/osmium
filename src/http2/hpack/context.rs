@@ -26,6 +26,8 @@ pub struct Context<'a> {
     dynamic_table: table::Table
 }
 
+// TODO Field type needs to go and be replaced by Header types.
+
 impl<'a> Context<'a> {
     pub fn new(static_table: &'a table::Table) -> Self {
         Context {

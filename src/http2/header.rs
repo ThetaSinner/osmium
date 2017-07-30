@@ -19,7 +19,7 @@
 use std::fmt;
 use std::slice;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum HeaderName {
     ContentLength,
     Host,
@@ -28,7 +28,7 @@ pub enum HeaderName {
     CustomHeader(String)
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum HeaderValue {
     Str(String),
     Num(i32)
@@ -110,6 +110,15 @@ impl<'a> From<&'a str> for HeaderName {
                 info!("Missing header conversion for [{}]. Will treat as custom header.", name);
                 HeaderName::CustomHeader(String::from(name))
             }
+        }
+    }
+}
+
+impl From<HeaderValue> for String {
+    fn from(value: HeaderValue) -> Self {
+        match value {
+            HeaderValue::Str(v) => v,
+            HeaderValue::Num(v) => format!("{}", v).to_owned()
         }
     }
 }

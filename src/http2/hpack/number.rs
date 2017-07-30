@@ -34,6 +34,9 @@ pub struct DecodedNumber {
 // TODO is u32 the right type to use? probably want to allow number to get as big as they can before they're capped.
 // maybe use usize instead?
 
+// see above, usize is pointer sized (32 bits in x86 and 64 bits on x86_64) which would mean the server adapts to the system it runs on?
+// and the server can use the max sizes provided by rust to decide which values are too large to decode at runtime.
+
 // n here is N in the hpack encoding instructions.
 // n must lie between 1 and 8 inclusive
 pub fn encode(num: u32, n: u8) -> EncodedNumber {

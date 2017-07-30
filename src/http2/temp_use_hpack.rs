@@ -16,12 +16,32 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 use http2::hpack;
+use http2::header;
 
-pub fn use_hpack_so_the_unused_warnings_go_away() {
+pub fn use_hpack_so_the_unused_warnings_go_away() -> hpack::unpack::UnpackedHeaders {
     let header_pack = hpack::HPack::new();
 
-    // let mut encoder_context = header_pack.new_context();
+    let mut headers = header::Headers::new();
+    headers.push(header::HeaderName::Accept, header::HeaderValue::Str(String::from("text/plain")));
+
+    let mut encoder_context = header_pack.new_context();
     let mut decoder_context = header_pack.new_context();
 
-    hpack::unpack::unpack(Vec::new().as_slice(), &mut decoder_context);
+    let packed = hpack::pack::pack(&headers, &mut encoder_context);
+    println!("{:?}", packed);
+    hpack::unpack::unpack(packed.as_slice(), &mut decoder_context)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{use_hpack_so_the_unused_warnings_go_away};
+
+    #[test]
+    pub fn pack_unpack() {
+        let unpacked = use_hpack_so_the_unused_warnings_go_away();
+
+        for header in unpacked.headers.iter() {
+            println!("{:?}", header);
+        }
+    }
 }

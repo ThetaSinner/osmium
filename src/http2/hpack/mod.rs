@@ -21,6 +21,8 @@ pub mod table;
 pub mod context;
 pub mod huffman;
 pub mod unpack;
+pub mod pack;
+pub mod flags;
 
 use self::table::{Table, Field};
 use self::context::Context;

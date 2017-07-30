@@ -21,12 +21,7 @@ use http2::hpack::number;
 use http2::hpack::string;
 use http2::hpack::context;
 use http2::hpack::table;
-
-static INDEXED_HEADER_FLAG: u8 = 0x80;
-static LITERAL_WITH_INDEXING_FLAG: u8 = 0x40;
-static LITERAL_WITHOUT_INDEXING_FLAG: u8 = 0xf0;
-static LITERAL_NEVER_INDEX_FLAG: u8 = 0x10;
-static SIZE_UPDATE_FLAG: u8 = 0x20;
+use http2::hpack::flags;
 
 pub struct UnpackedHeaders {
     pub headers: header::Headers,
@@ -46,7 +41,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
     while let Some(&&peek_front) = data_iter.peek() {
         // TODO a 0 in the MSB with an indexed header representation is an error, check for that after checking for other representations?
         // unfortunately that would mean decoding the number and making sure there are no strings after it otherise that'd be another representation...
-        if peek_front & INDEXED_HEADER_FLAG == INDEXED_HEADER_FLAG {
+        if peek_front & flags::INDEXED_HEADER_FLAG == flags::INDEXED_HEADER_FLAG {
             let decoded_number = number::decode(&mut data_iter, 7);
             unpacked_headers.octets_read += decoded_number.octets_read;
 
@@ -54,7 +49,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
 
             unpacked_headers.headers.push_header(header::Header::from(field));
         }
-        else if peek_front & LITERAL_WITH_INDEXING_FLAG == LITERAL_WITH_INDEXING_FLAG {
+        else if peek_front & flags::LITERAL_WITH_INDEXING_FLAG == flags::LITERAL_WITH_INDEXING_FLAG {
             let decoded_number = number::decode(&mut data_iter, 6);
             unpacked_headers.octets_read += decoded_number.octets_read;
 
@@ -90,7 +85,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 unpacked_headers.headers.push_header(header::Header::from(field));
             }
         }
-        else if peek_front & LITERAL_WITHOUT_INDEXING_FLAG == 0 {
+        else if peek_front & flags::LITERAL_WITHOUT_INDEXING_FLAG == 0 {
             let decoded_number = number::decode(&mut data_iter, 4);
             unpacked_headers.octets_read += decoded_number.octets_read;
 
@@ -120,7 +115,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
                 unpacked_headers.headers.push_header(header::Header::from(field));
             }
         }
-        else if peek_front & LITERAL_NEVER_INDEX_FLAG == LITERAL_NEVER_INDEX_FLAG {
+        else if peek_front & flags::LITERAL_NEVER_INDEX_FLAG == flags::LITERAL_NEVER_INDEX_FLAG {
             // TODO the output header needs to be marked, because the server is responsible for propogating the never index flag.
 
             let decoded_number = number::decode(&mut data_iter, 4);
@@ -157,7 +152,7 @@ pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
             header.set_allow_compression(false);
             unpacked_headers.headers.push_header(header);
         }
-        else if peek_front & SIZE_UPDATE_FLAG == SIZE_UPDATE_FLAG {
+        else if peek_front & flags::SIZE_UPDATE_FLAG == flags::SIZE_UPDATE_FLAG {
             let decoded_number = number::decode(&mut data_iter, 5);
             unpacked_headers.octets_read += decoded_number.octets_read;
 
