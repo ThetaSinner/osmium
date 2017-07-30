@@ -27,7 +27,12 @@ const NEVER_INDEXED: [header::HeaderName; 1] = [
     header::HeaderName::Date
 ];
 
-pub fn pack(headers: &header::Headers, context: &mut context::Context) -> Vec<u8> {
+// TODO the table size update needs to come through here I think?
+// how would that work.. hopefully there'll be an example in the spec
+
+// TODO per header huffman coding setting?
+
+pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffman_coding: bool) -> Vec<u8> {
     let mut target = Vec::new();
 
     for header in headers.iter() {
@@ -43,7 +48,7 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context) -> Vec<u8
                 pack_literal_never_indexed_with_indexed_name(index, &header.value, &mut target);
             }
             else {
-                pack_literal_never_indexed(&header, &mut target);
+                pack_literal_never_indexed(&header, use_huffman_coding, &mut target);
             }
         }
         else {
@@ -55,13 +60,13 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context) -> Vec<u8
                 else {
                     // the value is not currently indexed, we could index and allow the value to be added to the 
                     // dynamic table in the decoder, or we could not index and just refer to this header name.
-                    pack_literal_with_indexing_with_indexed_name(index, &header.value, &mut target);
+                    pack_literal_with_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
                     context.insert(field);
                 }
             }
             else {
                 // header name is not currently indexed, we can index it now, or send a literal representation.
-                pack_literal_with_indexing(&header, &mut target);
+                pack_literal_with_indexing(&header, use_huffman_coding, &mut target);
                 context.insert(field);
             }
         }
@@ -89,7 +94,7 @@ fn pack_indexed_header(index: usize, target: &mut Vec<u8>) {
     }
 }
 
-fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, target: &mut Vec<u8>) {
+fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {
     let encoded_name_index = number::encode(index as u32, 6);
 
     target.push(flags::LITERAL_WITH_INDEXING_FLAG | encoded_name_index.prefix);
@@ -97,15 +102,14 @@ fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &hea
         target.extend(rest);
     }
 
-    // TODO there is no way to disable huffman coding (if there were a reason to do so)
-    target.extend(string::encode(String::from(header_value.clone()), true));
+    target.extend(string::encode(String::from(header_value.clone()), use_huffman_coding));
 }
 
-fn pack_literal_with_indexing(header: &header::Header, target: &mut Vec<u8>) {
+fn pack_literal_with_indexing(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(flags::LITERAL_WITH_INDEXING_FLAG);
 
-    target.extend(string::encode(String::from(header.name.clone()), true));
-    target.extend(string::encode(String::from(header.value.clone()), true));
+    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(header.value.clone()), use_huffman_coding));
 }
 
 fn pack_literal_never_indexed_with_indexed_name(index: usize, header_value: &header::HeaderValue, target: &mut Vec<u8>) {
@@ -118,12 +122,14 @@ fn pack_literal_never_indexed_with_indexed_name(index: usize, header_value: &hea
 
     // field should not be compressed... which means not indexed but the spec is not clear
     // what should be done with regards to huffman coding.
+    // deliberately do not allow override of huffman coding for the value
     target.extend(string::encode(String::from(header_value.clone()), false));
 }
 
-fn pack_literal_never_indexed(header: &header::Header, target: &mut Vec<u8>) {
+fn pack_literal_never_indexed(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(flags::LITERAL_NEVER_INDEX_FLAG);
 
-    target.extend(string::encode(String::from(header.name.clone()), true));
+    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
+    // deliberately do not allow override of huffman coding for the value
     target.extend(string::encode(String::from(header.value.clone()), false));
 }

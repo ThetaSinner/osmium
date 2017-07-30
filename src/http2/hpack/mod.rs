@@ -113,3 +113,48 @@ impl HPack {
         Context::new(&self.static_table)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HPack, pack, unpack};
+    use http2::header;
+
+    fn to_hex_dump(data: &[u8]) -> String {
+        let mut hex = Vec::new();
+        for v in data {
+            hex.push(if v <= &16 {
+                format!("0{:x}", v).to_owned()
+            }
+            else {
+                format!("{:x}", v).to_owned()
+            });
+        }
+
+        let mut dump = hex.chunks(2).map(|x| {
+            format!("{}{} ", x[0], x[1]).to_owned()
+        }).fold(String::from(""), |acc, el| {
+            acc + &el
+        });
+
+        dump.pop();
+        dump
+    }
+
+    // See C.2.1
+    #[test]
+    pub fn encode_custom_header() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        headers.push(
+            header::HeaderName::CustomHeader(String::from("custom-key")),
+            header::HeaderValue::Str(String::from("custom-header"))
+        );
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        assert_eq!("400a 6375 7374 6f6d 2d6b 6579 0d63 7573 746f 6d2d 6865 6164 6572", to_hex_dump(encoded.as_slice()));
+    }
+}
