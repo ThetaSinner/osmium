@@ -21,6 +21,7 @@ use std::slice;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum HeaderName {
+    PseudoPath,
     ContentLength,
     Host,
     Accept,
@@ -93,6 +94,7 @@ impl Headers {
 impl From<HeaderName> for String {
     fn from(name: HeaderName) -> Self {
         match name {
+            HeaderName::PseudoPath => String::from(":path"),
             HeaderName::ContentLength => String::from("Content-Length"),
             HeaderName::Host => String::from("Host"),
             HeaderName::Accept => String::from("Accept"),
@@ -106,6 +108,7 @@ impl From<HeaderName> for String {
 impl<'a> From<&'a str> for HeaderName {
     fn from(name: &str) -> Self {
         match name {
+            ":path" => HeaderName::PseudoPath,
             "Content-Length" => HeaderName::ContentLength,
             "Host" => HeaderName::Host,
             "Accept" => HeaderName::Accept,

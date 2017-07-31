@@ -118,8 +118,11 @@ impl HPack {
 mod tests {
     use super::{HPack, pack, unpack, context};
     use http2::header;
+    use pretty_env_logger;
 
     fn to_hex_dump(data: &[u8]) -> String {
+        println!("{:?}, {}", data, data.len());
+
         let mut hex = Vec::new();
         for v in data {
             hex.push(if v <= &16 {
@@ -201,5 +204,29 @@ mod tests {
         // assert the dynamic table.
         assert_eq!(55, decoding_context.size());
         assert_table_entry(&decoding_context, 62, "custom-key", "custom-header");
+    }
+
+    // See C.2.2 encode
+    // TODO #[test]
+    pub fn encode_literal_field_without_indexing() {
+        pretty_env_logger::init().unwrap();
+
+        // TODO there's a bug in table.find_field, all the entries in the static table have managed to get in backwards...
+
+        trace!("starting test");
+
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        headers.push(
+            header::HeaderName::PseudoPath,
+            header::HeaderValue::Str(String::from("/sample/path"))
+        );
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        assert_eq!("040c 2f73 616d 706c 652f 7061 7468", to_hex_dump(encoded.as_slice()));
     }
 }

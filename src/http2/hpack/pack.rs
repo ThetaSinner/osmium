@@ -24,13 +24,22 @@ use http2::hpack::string;
 use http2::hpack::table;
 
 const NEVER_INDEXED: [header::HeaderName; 1] = [
+    // Date is a temporary example of a never indexed header
     header::HeaderName::Date
+];
+
+const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [
+    // Path is an example of a header which has common values which should be indexed i.e. '/' and '/index.html'
+    // but which will have many values which should not be fully indexed, just header name indexed
+    header::HeaderName::PseudoPath
 ];
 
 // TODO the table size update needs to come through here I think?
 // how would that work.. hopefully there'll be an example in the spec
 
 // TODO per header huffman coding setting?
+
+// TODO comments need updating, they're still the ones I wrote while puzzling out the encoder.
 
 pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffman_coding: bool) -> Vec<u8> {
     let mut target = Vec::new();
@@ -52,22 +61,38 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffm
             }
         }
         else {
+            trace!("okay, so we need to work out how to index this one");
+
             if let Some((index, with_value)) = context.find_field(&field) {
                 // header name is indexed and value is indexed as indicated by with_value.
                 if with_value {
                     pack_indexed_header(index, &mut target);
                 }
                 else {
+                    trace!("is indexed, but not with value");
                     // the value is not currently indexed, we could index and allow the value to be added to the 
                     // dynamic table in the decoder, or we could not index and just refer to this header name.
-                    pack_literal_with_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
-                    context.insert(field);
+                    if is_literal_without_indexing_header(&header.name) {
+                        trace!("pack without indexing");
+                        pack_literal_without_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
+                    }
+                    else {
+                        pack_literal_with_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
+                        context.insert(field);
+                    }
                 }
             }
             else {
+                trace!("not found, start from scratch");
+
                 // header name is not currently indexed, we can index it now, or send a literal representation.
-                pack_literal_with_indexing(&header, use_huffman_coding, &mut target);
-                context.insert(field);
+                if is_literal_without_indexing_header(&header.name) {
+                    pack_literal_without_indexing(&header, use_huffman_coding, &mut target);
+                }
+                else {
+                    pack_literal_with_indexing(&header, use_huffman_coding, &mut target);
+                    context.insert(field);
+                }
             }
         }
     }
@@ -78,6 +103,16 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffm
 fn is_never_index_header(header_name: &header::HeaderName) -> bool {
     for never_index_header_name in NEVER_INDEXED.into_iter() {
         if header_name == never_index_header_name {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_literal_without_indexing_header(header_name: &header::HeaderName) -> bool {
+    for literal_without_indexing_header_name in LITERAL_WITHOUT_INDEXING.into_iter() {
+        if header_name == literal_without_indexing_header_name {
             return true;
         }
     }
@@ -107,6 +142,25 @@ fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &hea
 
 fn pack_literal_with_indexing(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(flags::LITERAL_WITH_INDEXING_FLAG);
+
+    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(header.value.clone()), use_huffman_coding));
+}
+
+fn pack_literal_without_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {
+    trace!("index to use {}", index);
+    let encoded_name_index = number::encode(index as u32, 4);
+
+    target.push((!flags::LITERAL_WITH_INDEXING_FLAG) & encoded_name_index.prefix);
+    if let Some(rest) = encoded_name_index.rest {
+        target.extend(rest);
+    }
+
+    target.extend(string::encode(String::from(header_value.clone()), use_huffman_coding));
+}
+
+fn pack_literal_without_indexing(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
+    target.push(0u8);
 
     target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
     target.extend(string::encode(String::from(header.value.clone()), use_huffman_coding));

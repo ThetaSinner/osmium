@@ -55,13 +55,30 @@ impl<'a> Context<'a> {
     }
 
     pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
-        let opt_index = self.static_table.find_field(field);
+        let opt_static_index = self.static_table.find_field(field);
 
-        if let Some((_, true)) = opt_index {
-            opt_index
+        // TODO how very untidy.
+
+        if let Some((_, true)) = opt_static_index {
+            // the static match is optimal, return it
+            opt_static_index
         }
         else {
-            self.dynamic_table.find_field(field)
+            let opt_dymamic_index = self.dynamic_table.find_field(field);
+
+            if let Some((_, true)) = opt_dymamic_index {
+                // the dynamic mathc is optimal return it
+                opt_dymamic_index
+            }
+            else {
+                // neither match is optimal, return the lowest index which is some
+                if opt_static_index.is_some() {
+                    opt_static_index
+                }
+                else {
+                    opt_dymamic_index
+                }
+            }
         }
     }
 
