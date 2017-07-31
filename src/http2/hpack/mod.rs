@@ -116,7 +116,7 @@ impl HPack {
 
 #[cfg(test)]
 mod tests {
-    use super::{HPack, pack, unpack};
+    use super::{HPack, pack, unpack, context};
     use http2::header;
 
     fn to_hex_dump(data: &[u8]) -> String {
@@ -140,7 +140,7 @@ mod tests {
         dump
     }
 
-    fn assert_headers_equal(expected: &header::Headers, actual: &header::Headers) {
+    fn assert_headers(expected: &header::Headers, actual: &header::Headers) {
         assert_eq!(expected.len(), actual.len());
 
         let mut actual_iter = actual.iter();
@@ -149,6 +149,14 @@ mod tests {
             assert_eq!(expected_header.name, actual_header.name);
             assert_eq!(expected_header.value, actual_header.value);
         }
+    }
+
+    fn assert_table_entry(context: &context::Context, index: usize, name: &str, value: &str) {
+        let dynamic_table_entry = context.get(index);
+        assert!(dynamic_table_entry.is_some());
+        let field = dynamic_table_entry.unwrap();
+        assert_eq!(name, &field.name);
+        assert_eq!(value, &field.value);
     }
 
     // See C.2.1 encode
@@ -187,6 +195,11 @@ mod tests {
         let mut decoding_context = hpack.new_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
-        assert_headers_equal(&headers, &decoded.headers);
+        // assert the decoded headers.
+        assert_headers(&headers, &decoded.headers);
+        
+        // assert the dynamic table.
+        assert_eq!(55, decoding_context.size());
+        assert_table_entry(&decoding_context, 62, "custom-key", "custom-header");
     }
 }

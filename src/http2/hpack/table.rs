@@ -88,6 +88,10 @@ impl Table {
         self.fields.len()
     }
 
+    pub fn get_size(&self) -> usize {
+        self.size
+    }
+
     // returns optional, if some then a tuple. The first item is the index, the second item 
     // is a boolean indicating whether the input field matched the returned index with name and value (true)
     // or just name (false)

@@ -40,12 +40,17 @@ impl<'a> Context<'a> {
         self.dynamic_table.push_front(field);
     }
 
+    /// Get by index, where index is from 1 to static_table length + dynamic table length
     pub fn get(&self, index: usize) -> Option<&Field> {
-        if index < self.static_table.len() {
-            self.static_table.get(index)
+        // check that the input index refers to a table index rather than a vector index.
+        assert!(1 <= index);
+
+        let table_index = index - 1;
+        if table_index < self.static_table.len() {
+            self.static_table.get(table_index)
         }
         else {
-            self.dynamic_table.get(index)
+            self.dynamic_table.get(table_index - self.static_table.len())
         }
     }
 
@@ -58,6 +63,11 @@ impl<'a> Context<'a> {
         else {
             self.dynamic_table.find_field(field)
         }
+    }
+
+    // The size of the dynamic table
+    pub fn size(&self) -> usize {
+        self.dynamic_table.get_size()
     }
 
     pub fn set_max_size(&mut self, max_size: usize) {
