@@ -140,7 +140,18 @@ mod tests {
         dump
     }
 
-    // See C.2.1
+    fn assert_headers_equal(expected: &header::Headers, actual: &header::Headers) {
+        assert_eq!(expected.len(), actual.len());
+
+        let mut actual_iter = actual.iter();
+        for expected_header in expected.iter() {
+            let actual_header = actual_iter.next().unwrap();
+            assert_eq!(expected_header.name, actual_header.name);
+            assert_eq!(expected_header.value, actual_header.value);
+        }
+    }
+
+    // See C.2.1 encode
     #[test]
     pub fn encode_custom_header() {
         let hpack = HPack::new();
@@ -156,5 +167,26 @@ mod tests {
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         assert_eq!("400a 6375 7374 6f6d 2d6b 6579 0d63 7573 746f 6d2d 6865 6164 6572", to_hex_dump(encoded.as_slice()));
+    }
+
+    // C.2.1 decode
+    #[test]
+    pub fn decode_custom_header() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        headers.push(
+            header::HeaderName::CustomHeader(String::from("custom-key")),
+            header::HeaderValue::Str(String::from("custom-header"))
+        );
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        let mut decoding_context = hpack.new_context();
+        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+        assert_headers_equal(&headers, &decoded.headers);
     }
 }

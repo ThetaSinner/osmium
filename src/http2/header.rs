@@ -28,7 +28,7 @@ pub enum HeaderName {
     CustomHeader(String)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum HeaderValue {
     Str(String),
     Num(i32)
@@ -81,6 +81,10 @@ impl Headers {
 
     pub fn iter(&self) -> slice::Iter<Header> {
         self.headers.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.headers.len()
     }
 }
 

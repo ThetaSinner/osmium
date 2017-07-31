@@ -23,6 +23,7 @@ use http2::hpack::context;
 use http2::hpack::table;
 use http2::hpack::flags;
 
+#[derive(Debug)]
 pub struct UnpackedHeaders {
     pub headers: header::Headers,
     pub octets_read: usize
