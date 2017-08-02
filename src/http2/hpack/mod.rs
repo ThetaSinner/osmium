@@ -124,7 +124,7 @@ mod tests {
 
         let mut hex = Vec::new();
         for v in data {
-            hex.push(if v <= &16 {
+            hex.push(if v < &16 {
                 format!("0{:x}", v).to_owned()
             }
             else {
@@ -133,7 +133,12 @@ mod tests {
         }
 
         let mut dump = hex.chunks(2).map(|x| {
-            format!("{}{} ", x[0], x[1]).to_owned()
+            if x.len()  == 2 {
+                format!("{}{} ", x[0], x[1]).to_owned()
+            }
+            else {
+                format!("{} ", x[0]).to_owned()
+            }
         }).fold(String::from(""), |acc, el| {
             acc + &el
         });
@@ -150,6 +155,7 @@ mod tests {
             let actual_header = actual_iter.next().unwrap();
             assert_eq!(expected_header.name, actual_header.name);
             assert_eq!(expected_header.value, actual_header.value);
+            assert_eq!(expected_header.is_allow_compression(), actual_header.is_allow_compression());
         }
     }
 
@@ -223,6 +229,7 @@ mod tests {
         assert_eq!("040c 2f73 616d 706c 652f 7061 7468", to_hex_dump(encoded.as_slice()));
     }
 
+    // See C.2.2 decode
     #[test]
     pub fn decode_literal_field_without_indexing() {
         let hpack = HPack::new();
@@ -236,6 +243,60 @@ mod tests {
         );
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        let mut decoding_context = hpack.new_context();
+        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+        // assert the decoded headers.
+        assert_headers(&headers, &decoded.headers);
+        
+        // assert the dynamic table.
+        assert_eq!(0, decoding_context.size());
+    }
+
+    // TODO this uses the do not compress route to never indexed, add a test which
+    // uses a preset never indexed header name.
+
+    // See C.2.3 encode
+    #[test]
+    pub fn encode_literal_field_never_indexed() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        let mut secret_password_header = header::Header::new(
+            header::HeaderName::CustomHeader(String::from("password")),
+            header::HeaderValue::Str(String::from("secret"))
+        );
+        secret_password_header.set_allow_compression(false);
+
+        headers.push_header(secret_password_header);
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        assert_eq!("1008 7061 7373 776f 7264 0673 6563 7265 74", to_hex_dump(encoded.as_slice()));
+    }
+
+    // See C.2.3 decode
+    #[test]
+    pub fn decode_literal_field_never_indexed() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        let mut secret_password_header = header::Header::new(
+            header::HeaderName::CustomHeader(String::from("password")),
+            header::HeaderValue::Str(String::from("secret"))
+        );
+        secret_password_header.set_allow_compression(false);
+
+        headers.push_header(secret_password_header);
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        assert_eq!("1008 7061 7373 776f 7264 0673 6563 7265 74", to_hex_dump(encoded.as_slice()));
 
         let mut decoding_context = hpack.new_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
