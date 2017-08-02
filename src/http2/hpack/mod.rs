@@ -39,68 +39,68 @@ pub struct HPack {
 impl HPack {
     pub fn new() -> Self {
         let mut static_table = Table::new();
-         
-        static_table.push_front(Field{name: String::from(":authority"), value: String::from("")});
-        static_table.push_front(Field{name: String::from(":method"), value: String::from("GET")});
-        static_table.push_front(Field{name: String::from(":method"), value: String::from("POST")});
-        static_table.push_front(Field{name: String::from(":path"), value: String::from("/")});
-        static_table.push_front(Field{name: String::from(":path"), value: String::from("/index.html")});
-        static_table.push_front(Field{name: String::from(":scheme"), value: String::from("http")});
-        static_table.push_front(Field{name: String::from(":scheme"), value: String::from("https")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("200")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("204")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("206")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("304")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("400")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("404")});
-        static_table.push_front(Field{name: String::from(":status"), value: String::from("500")});
-        static_table.push_front(Field{name: String::from("accept-charset"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("accept-encoding"), value: String::from("gzip, deflate")});
-        static_table.push_front(Field{name: String::from("accept-language"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("accept-ranges"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("accept"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("access-control-allow-origin"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("age"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("allow"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("authorization"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("cache-control"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-disposition"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-encoding"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-language"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-length"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-location"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-range"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("content-type"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("cookie"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("date"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("etag"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("expect"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("expires"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("from"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("host"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("if-match"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("if-modified-since"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("if-none-match"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("if-range"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("if-unmodified-since"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("last-modified"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("link"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("location"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("max-forwards"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("proxy-authenticate"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("proxy-authorization"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("range"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("referer"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("refresh"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("retry-after"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("server"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("set-cookie"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("strict-transport-security"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("transfer-encoding"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("user-agent"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("vary"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("via"), value: String::from("")});
-        static_table.push_front(Field{name: String::from("www-authenticate"), value: String::from("")});
+        
+        static_table.push_back(Field{name: String::from(":authority"), value: String::from("")});
+        static_table.push_back(Field{name: String::from(":method"), value: String::from("GET")});
+        static_table.push_back(Field{name: String::from(":method"), value: String::from("POST")});
+        static_table.push_back(Field{name: String::from(":path"), value: String::from("/")});
+        static_table.push_back(Field{name: String::from(":path"), value: String::from("/index.html")});
+        static_table.push_back(Field{name: String::from(":scheme"), value: String::from("http")});
+        static_table.push_back(Field{name: String::from(":scheme"), value: String::from("https")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("200")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("204")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("206")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("304")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("400")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("404")});
+        static_table.push_back(Field{name: String::from(":status"), value: String::from("500")});
+        static_table.push_back(Field{name: String::from("accept-charset"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("accept-encoding"), value: String::from("gzip, deflate")});
+        static_table.push_back(Field{name: String::from("accept-language"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("accept-ranges"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("accept"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("access-control-allow-origin"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("age"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("allow"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("authorization"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("cache-control"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-disposition"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-encoding"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-language"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-length"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-location"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-range"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("content-type"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("cookie"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("date"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("etag"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("expect"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("expires"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("from"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("host"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("if-match"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("if-modified-since"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("if-none-match"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("if-range"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("if-unmodified-since"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("last-modified"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("link"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("location"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("max-forwards"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("proxy-authenticate"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("proxy-authorization"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("range"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("referer"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("refresh"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("retry-after"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("server"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("set-cookie"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("strict-transport-security"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("transfer-encoding"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("user-agent"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("vary"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("via"), value: String::from("")});
+        static_table.push_back(Field{name: String::from("www-authenticate"), value: String::from("")});
 
         assert_eq!(61, static_table.len(), "static table should have 61 entries");
 
@@ -207,12 +207,8 @@ mod tests {
     }
 
     // See C.2.2 encode
-    // TODO #[test]
+    #[test]
     pub fn encode_literal_field_without_indexing() {
-        pretty_env_logger::init().unwrap();
-
-        // TODO there's a bug in table.find_field, all the entries in the static table have managed to get in backwards...
-
         trace!("starting test");
 
         let hpack = HPack::new();

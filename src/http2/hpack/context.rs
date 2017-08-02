@@ -54,6 +54,10 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Returns the best match with the lowest matching index, or none otherwise.
+    /// The tuple returned contains the index matched and a flag indicating whether the 
+    /// header value matches. If there is a possible match with this flag true, then it is 
+    /// prefered over a match with the flag false.
     pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let opt_static_index = self.static_table.find_field(field);
 

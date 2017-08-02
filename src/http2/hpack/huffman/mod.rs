@@ -110,8 +110,6 @@ mod tests {
 
     #[test]
     fn encode_hello_world() {
-        pretty_env_logger::init().unwrap();
-
         let es = encode("Hello, world!");
         // This result has been verified manually by printing out binary and manually decoding.
         assert_eq!(vec!(198, 90, 40, 63, 210, 158, 15, 101, 18, 127, 31), es);

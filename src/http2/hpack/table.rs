@@ -75,6 +75,16 @@ impl Table {
         self.size += storage_size_required;
     }
 
+    // TODO can I make the compiler understand this is only to be used in one place
+    // without making a huge mess?
+
+    /// Append an element to the bottom of the table. This is only to be used
+    /// when building the static table. It bypasses the size checks and allows
+    /// the static table to be built in order
+    pub fn push_back(&mut self, field: Field) {
+        self.fields.push_back(field);
+    }
+
     pub fn get(&self, index: usize) -> Option<&Field> {
         if index < self.fields.len() {
             Some(&self.fields[index])
@@ -97,7 +107,6 @@ impl Table {
     // or just name (false)
     pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let matched_partition: (Vec<(usize, bool)>, Vec<(usize, bool)>) = self.fields.iter().enumerate().filter_map(|indexed_field| {
-            trace!("({}, {:?})", indexed_field.0, indexed_field.1);
             if indexed_field.1.name == field.name {
                 trace!("found match for {} at index {}", field.name, indexed_field.0);
                 Some((indexed_field.0, indexed_field.1.value == field.value))
@@ -109,16 +118,21 @@ impl Table {
             x.1
         });
 
+        // Note that the indices we've found start from 0, but the table is numbered from 1.
+        // so we add 1 to the index before returning it.
+
         if matched_partition.0.is_empty() {
             if matched_partition.1.is_empty() {
                 None
             }
             else {
-                Some(matched_partition.1[0])
+                let result = matched_partition.1[0];
+                Some((result.0 + 1, result.1))
             }
         }
         else {
-            Some(matched_partition.0[0])
+            let result = matched_partition.0[0];
+            Some((result.0 + 1, result.1))
         }
     }
 
