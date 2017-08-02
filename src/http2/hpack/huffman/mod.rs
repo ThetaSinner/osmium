@@ -105,7 +105,6 @@ pub fn decode(huffman_string: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use pretty_env_logger;
     use super::{encode, decode};
 
     #[test]

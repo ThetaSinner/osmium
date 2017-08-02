@@ -118,7 +118,6 @@ impl HPack {
 mod tests {
     use super::{HPack, pack, unpack, context};
     use http2::header;
-    use pretty_env_logger;
 
     fn to_hex_dump(data: &[u8]) -> String {
         println!("{:?}, {}", data, data.len());
@@ -209,8 +208,6 @@ mod tests {
     // See C.2.2 encode
     #[test]
     pub fn encode_literal_field_without_indexing() {
-        trace!("starting test");
-
         let hpack = HPack::new();
         let mut encoding_context = hpack.new_context();
 
@@ -224,5 +221,29 @@ mod tests {
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         assert_eq!("040c 2f73 616d 706c 652f 7061 7468", to_hex_dump(encoded.as_slice()));
+    }
+
+    #[test]
+    pub fn decode_literal_field_without_indexing() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        headers.push(
+            header::HeaderName::PseudoPath,
+            header::HeaderValue::Str(String::from("/sample/path"))
+        );
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        let mut decoding_context = hpack.new_context();
+        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+        // assert the decoded headers.
+        assert_headers(&headers, &decoded.headers);
+        
+        // assert the dynamic table.
+        assert_eq!(0, decoding_context.size());
     }
 }
