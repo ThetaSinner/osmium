@@ -358,13 +358,12 @@ mod tests {
     // TODO the tests above should assert the encoding context as well as the decoding context
     // to ensure they match.
 
-    use pretty_env_logger;
-
-    // See C.3 process multiple requests on the same context
-    #[test]
-    pub fn decode_multiple_requests_without_huffman_coding() {
-        pretty_env_logger::init().unwrap();
-
+    fn section_c_three_and_four_requests(
+        use_huffman_coding: bool,
+        request_one_hex_dump: &str,
+        request_two_hex_dump: &str,
+        request_three_hex_dump: &str
+    ) {
         let hpack = HPack::new();
 
         // These two contexts are the only state, everything else is only used in request processing.
@@ -391,8 +390,8 @@ mod tests {
                 header::HeaderValue::Str(String::from("www.example.com"))
             );
 
-            let encoded = pack::pack(&headers, &mut encoding_context, false);
-            assert_eq!("8286 8441 0f77 7777 2e65 7861 6d70 6c65 2e63 6f6d", to_hex_dump(encoded.as_slice()));
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            assert_eq!(request_one_hex_dump, to_hex_dump(encoded.as_slice()));
 
             let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
@@ -433,8 +432,8 @@ mod tests {
                 header::HeaderValue::Str(String::from("no-cache"))
             );
 
-            let encoded = pack::pack(&headers, &mut encoding_context, false);
-            assert_eq!("8286 84be 5808 6e6f 2d63 6163 6865", to_hex_dump(encoded.as_slice()));
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            assert_eq!(request_two_hex_dump, to_hex_dump(encoded.as_slice()));
 
             let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
@@ -477,8 +476,8 @@ mod tests {
                 header::HeaderValue::Str(String::from("custom-value"))
             );
 
-            let encoded = pack::pack(&headers, &mut encoding_context, false);
-            assert_eq!("8287 85bf 400a 6375 7374 6f6d 2d6b 6579 0c63 7573 746f 6d2d 7661 6c75 65", to_hex_dump(encoded.as_slice()));
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            assert_eq!(request_three_hex_dump, to_hex_dump(encoded.as_slice()));
 
             let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
@@ -498,5 +497,31 @@ mod tests {
             assert_table_entry(&encoding_context, 63, "Cache-Control", "no-cache");
             assert_table_entry(&encoding_context, 64, ":authority", "www.example.com");
         }
+    }
+
+    use pretty_env_logger;
+
+    // See C.3 process multiple requests on the same context
+    #[test]
+    pub fn decode_multiple_requests_without_huffman_coding() {
+        section_c_three_and_four_requests(
+            false,
+            "8286 8441 0f77 7777 2e65 7861 6d70 6c65 2e63 6f6d",
+            "8286 84be 5808 6e6f 2d63 6163 6865",
+            "8287 85bf 400a 6375 7374 6f6d 2d6b 6579 0c63 7573 746f 6d2d 7661 6c75 65"
+        );
+    }
+
+    // See C.3 process multiple requests on the same context with huffman coding
+    #[test]
+    pub fn decode_multiple_requests_with_huffman_coding() {
+        pretty_env_logger::init().unwrap();
+
+        section_c_three_and_four_requests(
+            true,
+            "8286 8441 8cf1 e3c2 e5f2 3a6b a0ab 90f4 ff",
+            "8286 84be 5886 a8eb 1064 9cbf",
+            "8287 85bf 4088 25a8 49e9 5ba9 7d7f 8925 a849 e95b b8e8 b4bf"
+        );
     }
 }

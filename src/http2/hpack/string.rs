@@ -32,7 +32,22 @@ pub struct DecodedString {
 pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
     // TODO the length of the string to encode should be capped.
 
-    let mut length = number::encode(string.len() as u32, 7);
+    // encode the actual string in the representation, either plain or compressed with huffman coding.
+    if use_huffman_coding {
+        let huffman_coded_string = huffman::encode(string.as_str());
+        let mut result = encode_string_length(huffman_coded_string.len() as u32, true);
+        result.extend(huffman_coded_string);
+        result
+    }
+    else {
+        let mut result = encode_string_length(string.len() as u32, false);
+        result.extend(string.as_bytes().to_vec());
+        result
+    }
+}
+
+fn encode_string_length(length: u32, use_huffman_coding: bool) -> Vec<u8> {
+    let mut length = number::encode(length, 7);
 
     // As the string length only uses the first 7 bits of its prefix
     // we can use the 8th bit as a flag for Huffman coding.
@@ -46,14 +61,6 @@ pub fn encode(string: String, use_huffman_coding: bool) -> Vec<u8> {
     let mut result = vec!(length.prefix);
     if let Some(rest) = length.rest {
         result.extend(rest);
-    }
-
-    // encode the actual string in the representation, either plain or compressed with huffman coding.
-    if use_huffman_coding {
-        result.extend(huffman::encode(string.as_str()));
-    }
-    else {
-        result.extend(string.as_bytes().to_vec());
     }
 
     result

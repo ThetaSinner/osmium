@@ -142,6 +142,8 @@ fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &hea
         target.extend(rest);
     }
 
+    trace!("{:?}", string::encode(String::from(header_value.clone()), use_huffman_coding));
+
     target.extend(string::encode(String::from(header_value.clone()), use_huffman_coding));
 }
 
@@ -155,6 +157,8 @@ fn pack_literal_with_indexing(header: &header::Header, use_huffman_coding: bool,
 fn pack_literal_without_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {
     trace!("index to use {}", index);
     let encoded_name_index = number::encode(index as u32, 4);
+
+    trace!("prefix {}", encoded_name_index.prefix);
 
     target.push((!flags::LITERAL_WITH_INDEXING_FLAG) & encoded_name_index.prefix);
     if let Some(rest) = encoded_name_index.rest {
