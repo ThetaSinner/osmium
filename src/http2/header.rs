@@ -23,7 +23,10 @@ use std::slice;
 pub enum HeaderName {
     PseudoPath,
     PseudoMethod,
+    PseudoScheme,
+    PseudoAuthority,
     ContentLength,
+    CacheControl,
     Host,
     Accept,
     Date,
@@ -97,7 +100,10 @@ impl From<HeaderName> for String {
         match name {
             HeaderName::PseudoPath => String::from(":path"),
             HeaderName::PseudoMethod => String::from(":method"),
+            HeaderName::PseudoScheme => String::from(":scheme"),
+            HeaderName::PseudoAuthority => String::from(":authority"),
             HeaderName::ContentLength => String::from("Content-Length"),
+            HeaderName::CacheControl => String::from("Cache-Control"),
             HeaderName::Host => String::from("Host"),
             HeaderName::Accept => String::from("Accept"),
             HeaderName::Date => String::from("Date"),
@@ -106,13 +112,19 @@ impl From<HeaderName> for String {
     }
 }
 
+// TODO according to MDN (and I assume the http spec) header names are case insensitive, so any matching
+// needs to not assume case
+
 // Convert strings to `HeaderName` for http request deserialisation.
 impl<'a> From<&'a str> for HeaderName {
     fn from(name: &str) -> Self {
         match name {
             ":path" => HeaderName::PseudoPath,
             ":method" => HeaderName::PseudoMethod,
+            ":scheme" => HeaderName::PseudoScheme,
+            ":authority" => HeaderName::PseudoAuthority,
             "Content-Length" => HeaderName::ContentLength,
+            "Cache-Control" => HeaderName::CacheControl,
             "Host" => HeaderName::Host,
             "Accept" => HeaderName::Accept,
             "Date" => HeaderName::Date,

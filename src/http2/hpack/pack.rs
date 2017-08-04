@@ -50,6 +50,8 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffm
             value: String::from(header.value.clone())
         };
 
+        trace!("{:?}", field);
+
         if !header.is_allow_compression() || is_never_index_header(&header.name) {
             // TODO it's really not clever to have to clone the value here to build a field for search.
             // especially as find_field is never used without a Header available.
@@ -64,6 +66,7 @@ pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffm
             trace!("okay, so we need to work out how to index this one");
 
             if let Some((index, with_value)) = context.find_field(&field) {
+                trace!("found a field, with index {} and with value present {}", index, with_value);
                 // header name is indexed and value is indexed as indicated by with_value.
                 if with_value {
                     pack_indexed_header(index, &mut target);
@@ -127,6 +130,8 @@ fn pack_indexed_header(index: usize, target: &mut Vec<u8>) {
     if let Some(rest) = encoded_index.rest {
         target.extend(rest);
     }
+
+    trace!("packed indexed header with index {}, {:?}", index, target);
 }
 
 fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {

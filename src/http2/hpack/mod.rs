@@ -27,6 +27,8 @@ pub mod flags;
 use self::table::{Table, Field};
 use self::context::Context;
 
+pub const STATIC_TABLE_LENGTH: usize = 61;
+
 pub struct HPack {
     // TODO not sure this needs to be stored, and applied to every created table, it can just be hardcoded for now.
     // The maximum total storage size allowed for lookup tables
@@ -102,7 +104,7 @@ impl HPack {
         static_table.push_back(Field{name: String::from("via"), value: String::from("")});
         static_table.push_back(Field{name: String::from("www-authenticate"), value: String::from("")});
 
-        assert_eq!(61, static_table.len(), "static table should have 61 entries");
+        assert_eq!(STATIC_TABLE_LENGTH, static_table.len(), "static table should have 61 entries");
 
         HPack {
             static_table: static_table
@@ -314,7 +316,7 @@ mod tests {
 
         let mut headers = header::Headers::new();
 
-        let mut method_get_header = header::Header::new(
+        let method_get_header = header::Header::new(
             header::HeaderName::PseudoMethod,
             header::HeaderValue::Str(String::from("GET"))
         );
@@ -351,5 +353,96 @@ mod tests {
         
         // assert the dynamic table.
         assert_eq!(0, decoding_context.size());
+    }
+
+    // TODO the tests above should assert the encoding context as well as the decoding context
+    // to ensure they match.
+
+    use pretty_env_logger;
+
+    // See C.3 process multiple requests on the same context
+    // TODO #[test]
+    pub fn decode_multiple_requests_without_huffman_coding() {
+        pretty_env_logger::init().unwrap();
+
+        let hpack = HPack::new();
+
+        // These two contexts are the only state, everything else is only used in request processing.
+        let mut encoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_context();
+
+        // Request 1
+        {
+            let mut headers = header::Headers::new();
+            headers.push(
+                header::HeaderName::PseudoMethod,
+                header::HeaderValue::Str(String::from("GET"))
+            );
+            headers.push(
+                header::HeaderName::PseudoScheme,
+                header::HeaderValue::Str(String::from("http"))
+            );
+            headers.push(
+                header::HeaderName::PseudoPath,
+                header::HeaderValue::Str(String::from("/"))
+            );
+            headers.push(
+                header::HeaderName::PseudoAuthority,
+                header::HeaderValue::Str(String::from("www.example.com"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, false);
+            assert_eq!("8286 8441 0f77 7777 2e65 7861 6d70 6c65 2e63 6f6d", to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(57, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, ":authority", "www.example.com");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, ":authority", "www.example.com");
+        }
+
+        // Request 2
+        {
+            let mut headers = header::Headers::new();
+            headers.push(
+                header::HeaderName::PseudoMethod,
+                header::HeaderValue::Str(String::from("GET"))
+            );
+            headers.push(
+                header::HeaderName::PseudoScheme,
+                header::HeaderValue::Str(String::from("http"))
+            );
+            headers.push(
+                header::HeaderName::PseudoPath,
+                header::HeaderValue::Str(String::from("/"))
+            );
+            headers.push(
+                header::HeaderName::PseudoAuthority,
+                header::HeaderValue::Str(String::from("www.example.com"))
+            );
+            headers.push(
+                header::HeaderName::CacheControl,
+                header::HeaderValue::Str(String::from("no-cache"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, false);
+            assert_eq!("8286 84be 5808 6e6f 2d63 6163 6865", to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(110, decoding_context.size());
+        }
     }
 }

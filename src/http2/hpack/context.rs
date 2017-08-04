@@ -17,6 +17,7 @@
 
 use http2::hpack::table;
 use http2::hpack::table::Field;
+use http2::hpack;
 
 // Notice that the static table is a reference to a single static table instance. 
 // That is, there is a single instance of the static table in the program.
@@ -65,22 +66,29 @@ impl<'a> Context<'a> {
 
         if let Some((_, true)) = opt_static_index {
             // the static match is optimal, return it
+            trace!("Found optimal match in static table at index {}", opt_static_index.unwrap().0);
             opt_static_index
         }
         else {
             let opt_dymamic_index = self.dynamic_table.find_field(field);
 
-            if let Some((_, true)) = opt_dymamic_index {
+            if let Some((index, true)) = opt_dymamic_index {
                 // the dynamic mathc is optimal return it
-                opt_dymamic_index
+                trace!("Found optimal match in dynamic table at index {}", index);
+                Some((index + hpack::STATIC_TABLE_LENGTH, true))
             }
             else {
                 // neither match is optimal, return the lowest index which is some
                 if opt_static_index.is_some() {
+                    trace!("No optimal match, prefering static index");
                     opt_static_index
                 }
+                else if let Some((index, with_value)) = opt_dymamic_index {
+                    trace!("No optimal match, and there is no matching static index");
+                    Some((index + hpack::STATIC_TABLE_LENGTH, with_value))
+                }
                 else {
-                    opt_dymamic_index
+                    None
                 }
             }
         }

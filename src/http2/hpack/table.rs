@@ -17,6 +17,7 @@
 
 // std
 use std::collections::VecDeque;
+use std::ascii::AsciiExt;
 
 #[derive(Clone, Debug)]
 pub struct Field {
@@ -107,7 +108,7 @@ impl Table {
     // or just name (false)
     pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let matched_partition: (Vec<(usize, bool)>, Vec<(usize, bool)>) = self.fields.iter().enumerate().filter_map(|indexed_field| {
-            if indexed_field.1.name == field.name {
+            if (&indexed_field.1.name).eq_ignore_ascii_case(&field.name) {
                 trace!("found match for {} at index {}", field.name, indexed_field.0);
                 Some((indexed_field.0, indexed_field.1.value == field.value))
             }
