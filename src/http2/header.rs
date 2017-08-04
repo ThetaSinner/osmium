@@ -116,18 +116,20 @@ impl From<HeaderName> for String {
 // needs to not assume case
 
 // Convert strings to `HeaderName` for http request deserialisation.
+// The string name to convert is first converted to lower case. Since header names should be treated as case 
+// insensitive, the case in the input should not matter. TODO reference source for this.
 impl<'a> From<&'a str> for HeaderName {
     fn from(name: &str) -> Self {
-        match name {
+        match name.to_lowercase().as_str() {
             ":path" => HeaderName::PseudoPath,
             ":method" => HeaderName::PseudoMethod,
             ":scheme" => HeaderName::PseudoScheme,
             ":authority" => HeaderName::PseudoAuthority,
-            "Content-Length" => HeaderName::ContentLength,
-            "Cache-Control" => HeaderName::CacheControl,
-            "Host" => HeaderName::Host,
-            "Accept" => HeaderName::Accept,
-            "Date" => HeaderName::Date,
+            "content-length" => HeaderName::ContentLength,
+            "cache-control" => HeaderName::CacheControl,
+            "host" => HeaderName::Host,
+            "accept" => HeaderName::Accept,
+            "date" => HeaderName::Date,
             _ => {
                 info!("Missing header conversion for [{}]. Will treat as custom header.", name);
                 HeaderName::CustomHeader(String::from(name))

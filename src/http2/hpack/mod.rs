@@ -361,7 +361,7 @@ mod tests {
     use pretty_env_logger;
 
     // See C.3 process multiple requests on the same context
-    // TODO #[test]
+    #[test]
     pub fn decode_multiple_requests_without_huffman_coding() {
         pretty_env_logger::init().unwrap();
 
@@ -443,6 +443,60 @@ mod tests {
             
             // assert the dynamic table.
             assert_eq!(110, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, "cache-control", "no-cache");
+            assert_table_entry(&decoding_context, 63, ":authority", "www.example.com");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, "Cache-Control", "no-cache");
+            assert_table_entry(&encoding_context, 63, ":authority", "www.example.com");
+        }
+
+        // Third request
+        {
+            let mut headers = header::Headers::new();
+            headers.push(
+                header::HeaderName::PseudoMethod,
+                header::HeaderValue::Str(String::from("GET"))
+            );
+            headers.push(
+                header::HeaderName::PseudoScheme,
+                header::HeaderValue::Str(String::from("https"))
+            );
+            headers.push(
+                header::HeaderName::PseudoPath,
+                header::HeaderValue::Str(String::from("/index.html"))
+            );
+            headers.push(
+                header::HeaderName::PseudoAuthority,
+                header::HeaderValue::Str(String::from("www.example.com"))
+            );
+            headers.push(
+                header::HeaderName::CustomHeader(String::from("custom-key")),
+                header::HeaderValue::Str(String::from("custom-value"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, false);
+            assert_eq!("8287 85bf 400a 6375 7374 6f6d 2d6b 6579 0c63 7573 746f 6d2d 7661 6c75 65", to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(164, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, "custom-key", "custom-value");
+            assert_table_entry(&decoding_context, 63, "cache-control", "no-cache");
+            assert_table_entry(&decoding_context, 64, ":authority", "www.example.com");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, "custom-key", "custom-value");
+            assert_table_entry(&encoding_context, 63, "Cache-Control", "no-cache");
+            assert_table_entry(&encoding_context, 64, ":authority", "www.example.com");
         }
     }
 }
