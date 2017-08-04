@@ -296,7 +296,52 @@ mod tests {
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
-        assert_eq!("1008 7061 7373 776f 7264 0673 6563 7265 74", to_hex_dump(encoded.as_slice()));
+        let mut decoding_context = hpack.new_context();
+        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+
+        // assert the decoded headers.
+        assert_headers(&headers, &decoded.headers);
+        
+        // assert the dynamic table.
+        assert_eq!(0, decoding_context.size());
+    }
+
+    // See C.2.4 encode
+    #[test]
+    pub fn encode_indexed() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        let mut method_get_header = header::Header::new(
+            header::HeaderName::PseudoMethod,
+            header::HeaderValue::Str(String::from("GET"))
+        );
+
+        headers.push_header(method_get_header);
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
+
+        assert_eq!("82", to_hex_dump(encoded.as_slice()));
+    }
+
+    // See C.2.4 decode
+    #[test]
+    pub fn decode_indexed() {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+
+        let mut headers = header::Headers::new();
+
+        let method_get_header = header::Header::new(
+            header::HeaderName::PseudoMethod,
+            header::HeaderValue::Str(String::from("GET"))
+        );
+
+        headers.push_header(method_get_header);
+
+        let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
