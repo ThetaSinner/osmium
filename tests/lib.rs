@@ -17,11 +17,11 @@
 
 extern crate osmium;
 #[macro_use] extern crate log;
-extern crate pretty_env_logger;
 extern crate curl;
 
 // std
 use std::thread;
+use std::env;
 
 // curl
 use curl::easy::Easy;
@@ -29,9 +29,19 @@ use curl::easy::Easy;
 // osmium
 use osmium::http::{request, response, server, handler, status, header};
 
+fn get_server_port_range_start() -> i32 {
+    match env::var("SERVER_PORT_RANGE_START") {
+        Ok(val) => val.parse::<i32>().unwrap(),
+        Err(e) => {
+            warn!("Server port range start is not set {}", e);
+            8000
+        }
+    }
+}
+
 #[test]
 fn empty_request() {
-    pretty_env_logger::init().unwrap();
+    let port = get_server_port_range_start() + 1;
 
     thread::spawn(move || {
         debug!("Starting a server");
@@ -57,7 +67,7 @@ fn empty_request() {
 
         let settings = server::Settings {
             host: Some("0.0.0.0".to_owned()),
-            port: Some(8001)
+            port: Some(port)
         };
 
         server::run(MyHandler, Some(settings));
@@ -67,7 +77,7 @@ fn empty_request() {
     {
         let mut handle = Easy::new();   
 
-        handle.url("http://localhost:8001").unwrap();
+        handle.url(format!("http://localhost:{}", port).as_str()).unwrap();
         handle.show_header(true).unwrap();
         let mut transfer = handle.transfer();
         transfer.write_function(|new_data| {
@@ -90,6 +100,9 @@ fn empty_request() {
 
 #[test]
 fn serve_file() {
+
+    let port = get_server_port_range_start() + 2;
+
     thread::spawn(move || {
         debug!("Starting a server");
 
@@ -130,7 +143,7 @@ fn serve_file() {
 
         let settings = server::Settings {
             host: Some("0.0.0.0".to_owned()),
-            port: Some(8002)
+            port: Some(port)
         };
 
         server::run(MyHandler, Some(settings));
@@ -140,7 +153,7 @@ fn serve_file() {
     {
         let mut handle = Easy::new();   
 
-        handle.url("http://localhost:8002/index.html").unwrap();
+        handle.url(format!("http://localhost:{}/index.html", port).as_ref()).unwrap();
         handle.show_header(true).unwrap();
         let mut transfer = handle.transfer();
         transfer.write_function(|new_data| {
@@ -164,6 +177,8 @@ fn serve_file() {
 
 #[test]
 fn serve_file_not_found() {
+    let port = get_server_port_range_start() + 3;
+
     thread::spawn(move || {
         debug!("Starting a server");
 
@@ -204,7 +219,7 @@ fn serve_file_not_found() {
 
         let settings = server::Settings {
             host: Some("0.0.0.0".to_owned()),
-            port: Some(8003)
+            port: Some(port)
         };
 
         server::run(MyHandler, Some(settings));
@@ -214,7 +229,7 @@ fn serve_file_not_found() {
     {
         let mut handle = Easy::new();   
 
-        handle.url("http://localhost:8003").unwrap();
+        handle.url(format!("http://localhost:{}", port).as_ref()).unwrap();
         handle.show_header(true).unwrap();
         let mut transfer = handle.transfer();
         transfer.write_function(|new_data| {
