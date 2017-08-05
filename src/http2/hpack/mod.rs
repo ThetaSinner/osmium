@@ -27,18 +27,22 @@ pub mod flags;
 use self::table::{Table, Field};
 use self::context::Context;
 
+/// The number of items in the static table as defined in hpack section 2.3.1
 pub const STATIC_TABLE_LENGTH: usize = 61;
 
+/// Provides a container for the single instance of the static table,
+/// and a method for constructing `Context` structures which have
+/// a read-only reference to the static table instance.
 pub struct HPack {
-    // TODO not sure this needs to be stored, and applied to every created table, it can just be hardcoded for now.
-    // The maximum total storage size allowed for lookup tables
-    //max_table_size_setting: usize,
-
-    /// The single static table instance to be shared by all contexts provided by this `HPack` instance
+    /// The single static table instance to be shared by all contexts 
+    /// provided by this `HPack` instance.
     static_table: Table
 }
 
 impl HPack {
+    /// Creates a new `HPack` instance. 
+    /// This method builds an instance of the predefined static table to be 
+    /// provided to contexts created from this structure.
     pub fn new() -> Self {
         let mut static_table = Table::new();
         
@@ -111,6 +115,8 @@ impl HPack {
         }
     }
 
+    /// Create a new `Context` structure with a reference to the static table owned by this 
+    /// `HPack` instance.
     pub fn new_context(&self) -> Context {
         Context::new(&self.static_table)
     }
