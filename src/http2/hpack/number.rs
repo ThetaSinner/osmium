@@ -19,6 +19,7 @@
 use std::slice::Iter;
 use std::iter::Peekable;
 
+/// Representation for an encoded number as defined by hpack section 5.1
 #[derive(Debug)]
 pub struct EncodedNumber {
     pub prefix: u8,

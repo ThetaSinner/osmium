@@ -114,6 +114,10 @@ impl<'a> Context<'a> {
 
     /// Set the maximum size the dynamic table is permitted to use. This value must be
     /// less than SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2.
+    ///
+    /// Note that reducing the size of the dynamic table may cause entry eviction, as per
+    /// hpack section 4.3.
+    ///
     // TODO the hpack spec does not define how to handle an error (value larger than size setting),
     // so this code should be modified after reading the http2 spec.
     pub fn set_max_size(&mut self, max_size: usize) {
