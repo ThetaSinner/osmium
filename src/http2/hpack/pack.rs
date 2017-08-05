@@ -23,9 +23,9 @@ use http2::hpack::number;
 use http2::hpack::string;
 use http2::hpack::table;
 
-const NEVER_INDEXED: [header::HeaderName; 1] = [
+const NEVER_INDEXED: [header::HeaderName; 0] = [
     // Date is a temporary example of a never indexed header
-    header::HeaderName::Date
+    //header::HeaderName::Date
 ];
 
 const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [

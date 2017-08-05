@@ -25,11 +25,15 @@ pub enum HeaderName {
     PseudoMethod,
     PseudoScheme,
     PseudoAuthority,
+    PseudoStatus,
     ContentLength,
     CacheControl,
+    ContentEncoding,
     Host,
     Accept,
     Date,
+    Location,
+    SetCookie,
     CustomHeader(String)
 }
 
@@ -102,11 +106,15 @@ impl From<HeaderName> for String {
             HeaderName::PseudoMethod => String::from(":method"),
             HeaderName::PseudoScheme => String::from(":scheme"),
             HeaderName::PseudoAuthority => String::from(":authority"),
+            HeaderName::PseudoStatus => String::from(":status"),
             HeaderName::ContentLength => String::from("Content-Length"),
             HeaderName::CacheControl => String::from("Cache-Control"),
+            HeaderName::ContentEncoding => String::from("Content-Encoding"),
             HeaderName::Host => String::from("Host"),
             HeaderName::Accept => String::from("Accept"),
             HeaderName::Date => String::from("Date"),
+            HeaderName::Location => String::from("Location"),
+            HeaderName::SetCookie => String::from("Set-Cookie"),
             HeaderName::CustomHeader(v) => v
         }
     }
@@ -125,11 +133,15 @@ impl<'a> From<&'a str> for HeaderName {
             ":method" => HeaderName::PseudoMethod,
             ":scheme" => HeaderName::PseudoScheme,
             ":authority" => HeaderName::PseudoAuthority,
+            ":status" => HeaderName::PseudoStatus,
             "content-length" => HeaderName::ContentLength,
             "cache-control" => HeaderName::CacheControl,
+            "content-encoding" => HeaderName::ContentEncoding,
             "host" => HeaderName::Host,
             "accept" => HeaderName::Accept,
             "date" => HeaderName::Date,
+            "location" => HeaderName::Location,
+            "set-cookie" => HeaderName::SetCookie,
             _ => {
                 info!("Missing header conversion for [{}]. Will treat as custom header.", name);
                 HeaderName::CustomHeader(String::from(name))

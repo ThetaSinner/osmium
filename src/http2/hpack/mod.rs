@@ -515,13 +515,192 @@ mod tests {
     // See C.3 process multiple requests on the same context with huffman coding
     #[test]
     pub fn decode_multiple_requests_with_huffman_coding() {
-        pretty_env_logger::init().unwrap();
-
         section_c_three_and_four_requests(
             true,
             "8286 8441 8cf1 e3c2 e5f2 3a6b a0ab 90f4 ff",
             "8286 84be 5886 a8eb 1064 9cbf",
             "8287 85bf 4088 25a8 49e9 5ba9 7d7f 8925 a849 e95b b8e8 b4bf"
         );
+    }
+
+    fn section_c_five_and_six_responses(
+        use_huffman_coding: bool,
+        response_one_hex_dump: &str,
+        response_two_hex_dump: &str,
+        response_three_hex_dump: &str
+    ) {
+        let hpack = HPack::new();
+        let mut encoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_context();
+
+        // This example uses a dynamic table with max size 256 bytes, so that some evictions occur.
+        encoding_context.set_max_size(256);
+        decoding_context.set_max_size(256);
+
+        // Response 1
+        {
+            let mut headers = header::Headers::new();
+
+            headers.push(
+                header::HeaderName::PseudoStatus,
+                header::HeaderValue::Num(302)
+            );
+            headers.push(
+                header::HeaderName::CacheControl,
+                header::HeaderValue::Str(String::from("private"))
+            );
+            headers.push(
+                header::HeaderName::Date,
+                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:21 GMT"))
+            );
+            headers.push(
+                header::HeaderName::Location,
+                header::HeaderValue::Str(String::from("https://www.example.com"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+
+            assert_eq!(response_one_hex_dump, to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(222, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, "location", "https://www.example.com");
+            assert_table_entry(&decoding_context, 63, "date", "Mon, 21 Oct 2013 20:13:21 GMT");
+            assert_table_entry(&decoding_context, 64, "cache-control", "private");
+            assert_table_entry(&decoding_context, 65, ":status", "302");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, "Location", "https://www.example.com");
+            assert_table_entry(&encoding_context, 63, "Date", "Mon, 21 Oct 2013 20:13:21 GMT");
+            assert_table_entry(&encoding_context, 64, "Cache-Control", "private");
+            assert_table_entry(&encoding_context, 65, ":status", "302");
+        }
+
+        // Response 2
+        {
+            let mut headers = header::Headers::new();
+
+            headers.push(
+                header::HeaderName::PseudoStatus,
+                header::HeaderValue::Num(307)
+            );
+            headers.push(
+                header::HeaderName::CacheControl,
+                header::HeaderValue::Str(String::from("private"))
+            );
+            headers.push(
+                header::HeaderName::Date,
+                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:21 GMT"))
+            );
+            headers.push(
+                header::HeaderName::Location,
+                header::HeaderValue::Str(String::from("https://www.example.com"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+
+            assert_eq!(response_two_hex_dump, to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(222, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, ":status", "307");
+            assert_table_entry(&decoding_context, 63, "location", "https://www.example.com");
+            assert_table_entry(&decoding_context, 64, "date", "Mon, 21 Oct 2013 20:13:21 GMT");
+            assert_table_entry(&decoding_context, 65, "cache-control", "private");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, ":status", "307");
+            assert_table_entry(&encoding_context, 63, "Location", "https://www.example.com");
+            assert_table_entry(&encoding_context, 64, "Date", "Mon, 21 Oct 2013 20:13:21 GMT");
+            assert_table_entry(&encoding_context, 65, "Cache-Control", "private");
+        }
+
+        // Response 3
+        {
+            let mut headers = header::Headers::new();
+
+            headers.push(
+                header::HeaderName::PseudoStatus,
+                header::HeaderValue::Num(200)
+            );
+            headers.push(
+                header::HeaderName::CacheControl,
+                header::HeaderValue::Str(String::from("private"))
+            );
+            headers.push(
+                header::HeaderName::Date,
+                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:22 GMT"))
+            );
+            headers.push(
+                header::HeaderName::Location,
+                header::HeaderValue::Str(String::from("https://www.example.com"))
+            );
+            headers.push(
+                header::HeaderName::ContentEncoding,
+                header::HeaderValue::Str(String::from("gzip"))
+            );
+            headers.push(
+                header::HeaderName::SetCookie,
+                header::HeaderValue::Str(String::from("foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1"))
+            );
+
+            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+
+            assert_eq!(response_three_hex_dump, to_hex_dump(encoded.as_slice()));
+
+            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+
+            // assert the decoded headers.
+            assert_headers(&headers, &decoded.headers);
+            
+            // assert the dynamic table.
+            assert_eq!(215, decoding_context.size());
+            assert_table_entry(&decoding_context, 62, "set-cookie", "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1");
+            assert_table_entry(&decoding_context, 63, "content-encoding", "gzip");
+            assert_table_entry(&decoding_context, 64, "date", "Mon, 21 Oct 2013 20:13:22 GMT");
+
+            // assert that the encoding context is the same as the decoding context
+            // TODO extract function.
+            assert_eq!(decoding_context.size(), encoding_context.size());
+            assert_table_entry(&encoding_context, 62, "Set-Cookie", "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1");
+            assert_table_entry(&encoding_context, 63, "Content-Encoding", "gzip");
+            assert_table_entry(&encoding_context, 64, "Date", "Mon, 21 Oct 2013 20:13:22 GMT");
+        }
+    }
+
+    // See C.5
+    #[test]
+    pub fn multiple_responses_without_huffman_coding() {
+        section_c_five_and_six_responses(
+            false,
+            "4803 3330 3258 0770 7269 7661 7465 611d 4d6f 6e2c 2032 3120 4f63 7420 3230 3133 2032 303a 3133 3a32 3120 474d 546e 1768 7474 7073 3a2f 2f77 7777 2e65 7861 6d70 6c65 2e63 6f6d",
+            "4803 3330 37c1 c0bf",
+            "88c1 611d 4d6f 6e2c 2032 3120 4f63 7420 3230 3133 2032 303a 3133 3a32 3220 474d 54c0 5a04 677a 6970 7738 666f 6f3d 4153 444a 4b48 514b 425a 584f 5157 454f 5049 5541 5851 5745 4f49 553b 206d 6178 2d61 6765 3d33 3630 303b 2076 6572 7369 6f6e 3d31"
+        )
+    }
+
+    // See C.6
+    #[test]
+    pub fn multiple_responses_with_huffman_coding() {
+        section_c_five_and_six_responses(
+            true,
+            "4882 6402 5885 aec3 771a 4b61 96d0 7abe 9410 54d4 44a8 2005 9504 0b81 66e0 82a6 2d1b ff6e 919d 29ad 1718 63c7 8f0b 97c8 e9ae 82ae 43d3",
+            "4883 640e ffc1 c0bf",
+            "88c1 6196 d07a be94 1054 d444 a820 0595 040b 8166 e084 a62d 1bff c05a 839b d9ab 77ad 94e7 821d d7f2 e6c7 b335 dfdf cd5b 3960 d5af 2708 7f36 72c1 ab27 0fb5 291f 9587 3160 65c0 03ed 4ee5 b106 3d50 07"
+        )
     }
 }

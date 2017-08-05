@@ -178,6 +178,7 @@ impl From<table::Field> for header::Header {
             header_name.clone(), 
             match header_name {
                 // TODO map types which should be numbers etc.
+                header::HeaderName::PseudoStatus => header::HeaderValue::Num(field.value.parse::<i32>().unwrap()),
                 _ => header::HeaderValue::Str(field.value)
             }
         )
