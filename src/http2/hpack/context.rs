@@ -19,9 +19,17 @@ use http2::hpack::table;
 use http2::hpack::table::Field;
 use http2::hpack;
 
-// Notice that the static table is a reference to a single static table instance. 
-// That is, there is a single instance of the static table in the program.
-// The dynamic table belongs to this context.
+/// Represents and hpack context, as defined in hpack section 2.2.
+///
+/// The context consists two indexing tables, see hpack section 2.3. The tables are
+/// a static table and a dynamic table, see hpack sections 2.3.1 and 2.3.2.
+///
+/// The two tables are accesed in a single address space, as defined in hpack section 2.3.3.
+/// The context structure provides an interface to this single address space.
+///
+/// Note that this context has a reference to a single instance static table which is required
+/// to live at least as long as this context instance. The dynamic table however belongs to 
+/// this context.
 pub struct Context<'a> {
     static_table: &'a table::Table,
     dynamic_table: table::Table
@@ -30,6 +38,7 @@ pub struct Context<'a> {
 // TODO Field type needs to go and be replaced by Header types.
 
 impl<'a> Context<'a> {
+    /// Create a new context object with a reference to the given static table.
     pub fn new(static_table: &'a table::Table) -> Self {
         Context {
             static_table: static_table,
@@ -37,11 +46,14 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Inserts a header into the dynamic table. As per section 2.3.3, insertion is at the front
+    /// of the dynamic table. Equivalently, the insertion point is after the end of the static table.
     pub fn insert(&mut self, field: Field) {
         self.dynamic_table.push_front(field);
     }
 
-    /// Get by index, where index is from 1 to static_table length + dynamic table length
+    /// Get by index, where index is from 1 to static_table length + dynamic table length/
+    /// See hpack section 2.3.3 on the single address space.
     pub fn get(&self, index: usize) -> Option<&Field> {
         // check that the input index refers to a table index rather than a vector index.
         assert!(1 <= index);
@@ -59,6 +71,7 @@ impl<'a> Context<'a> {
     /// The tuple returned contains the index matched and a flag indicating whether the 
     /// header value matches. If there is a possible match with this flag true, then it is 
     /// prefered over a match with the flag false.
+    /// The index returned refers to the single address space.
     pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let opt_static_index = self.static_table.find_field(field);
 
@@ -94,11 +107,15 @@ impl<'a> Context<'a> {
         }
     }
 
-    // The size of the dynamic table
+    /// The size of the dynamic table in bytes. See hpack section 4.1
     pub fn size(&self) -> usize {
         self.dynamic_table.get_size()
     }
 
+    /// Set the maximum size the dynamic table is permitted to use. This value must be
+    /// less than SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2.
+    // TODO the hpack spec does not define how to handle an error (value larger than size setting),
+    // so this code should be modified after reading the http2 spec.
     pub fn set_max_size(&mut self, max_size: usize) {
         self.dynamic_table.set_max_size(max_size);
     }
