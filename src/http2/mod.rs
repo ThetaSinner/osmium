@@ -15,6 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-mod hpack;
+// This module has been made public because it makes easier to generate documentation
+// and because it does little harm to make it public, so long as the documentation makes
+// it clear how to use the library, and that this module is intended for internal use.
+pub mod hpack;
+
 pub mod header;
 pub mod temp_use_hpack;

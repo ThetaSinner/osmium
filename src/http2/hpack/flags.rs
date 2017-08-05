@@ -15,10 +15,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-pub static INDEXED_HEADER_FLAG: u8 = 0x80;
+//! Flags which are used for settings and reading bits used as hpack 
+//! markers.
 
-pub static LITERAL_WITH_INDEXING_FLAG: u8 = 0x40;
-pub static LITERAL_WITHOUT_INDEXING_FLAG: u8 = 0xf0;
-pub static LITERAL_NEVER_INDEX_FLAG: u8 = 0x10;
+/// The bit pattern `10000000`, used to match the prefix `1`
+pub const INDEXED_HEADER_FLAG: u8 = 0x80;
 
-pub static SIZE_UPDATE_FLAG: u8 = 0x20;
+/// The bit pattern `01000000` used to match the prefix `01`
+pub const LITERAL_WITH_INDEXING_FLAG: u8 = 0x40;
+/// The bit pattern `11110000`, used to match the prefix `0000`
+pub const LITERAL_WITHOUT_INDEXING_FLAG: u8 = 0xf0;
+/// The bit pattern `00010000`, used to match the prefix `0001`
+pub const LITERAL_NEVER_INDEX_FLAG: u8 = 0x10;
+
+/// The bit pattern `00100000`, used to match the prefix `001`
+pub const SIZE_UPDATE_FLAG: u8 = 0x20;
