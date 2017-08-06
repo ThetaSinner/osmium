@@ -33,9 +33,11 @@ pub fn build_frame<T: HttpFrame>(frame: T) -> Vec<u8> {
     let length = frame.get_length();
 
     assert_eq!((length >> 24) as u8, 0, "frame size error");
-    result.append((length >> 16) as u8);
-    result.append((length >> 8) as u8);
-    result.append(length as u8);
+    result.push((length >> 16) as u8);
+    result.push((length >> 8) as u8);
+    result.push(length as u8);
 
     // TODO build the rest of the frame
+
+    result
 }
