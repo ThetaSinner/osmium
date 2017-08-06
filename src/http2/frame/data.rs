@@ -15,14 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::HttpFrame;
+use super::CompressibleHttpFrame;
 
 const DATA_FRAME_TYPE: u8 = 0x0;
 
 const FLAG_END_STREAM: u8 = 0x1;
 const FLAG_PADDED: u8 = 0x8;
 
-struct DataFrame {
+pub struct DataFrame {
     flags: u8,
     pad_length: u8,
     payload: Vec<u8>
@@ -59,12 +59,12 @@ impl DataFrame {
     }
 }
 
-impl HttpFrame for DataFrame {
+impl CompressibleHttpFrame for DataFrame {
     fn get_length(&self) -> i32 {
         self.payload.len() as i32
     }
 
-    fn get_frame_type() -> u8 {
+    fn get_frame_type(&self) -> u8 {
         DATA_FRAME_TYPE
     }
 

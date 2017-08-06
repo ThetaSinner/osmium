@@ -17,17 +17,30 @@
 
 pub mod data;
 
-pub trait HttpFrame {
+const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
+
+pub use self::data::DataFrame;
+
+pub trait CompressibleHttpFrame {
     fn get_length(&self) -> i32;
 
-    fn get_frame_type() -> u8;
+    fn get_frame_type(&self) -> u8;
 
     fn get_flags(&self) -> u8;
 
     fn get_payload(self) -> Vec<u8>;
 }
 
-pub fn build_frame<T: HttpFrame>(frame: T) -> Vec<u8> {
+pub struct FrameHeader {
+    pub length: u32,
+    pub frame_type: u8,
+    pub flags: u8,
+    pub stream_id: u32
+}
+
+pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
+    where T : CompressibleHttpFrame 
+{
     let mut result = Vec::new();
 
     let length = frame.get_length();
@@ -37,7 +50,36 @@ pub fn build_frame<T: HttpFrame>(frame: T) -> Vec<u8> {
     result.push((length >> 8) as u8);
     result.push(length as u8);
 
-    // TODO build the rest of the frame
+    result.push(frame.get_frame_type());
+    result.push(frame.get_flags());
+
+    result.push(STREAM_IDENTIFIER_RESERVED_BIT_MASK & (stream_id >> 24) as u8);
+    result.push((stream_id >> 16) as u8);
+    result.push((stream_id >> 8) as u8);
+    result.push(stream_id as u8);
+
+    result.extend(frame.get_payload());
 
     result
+}
+
+pub fn decompress_frame(frame: Vec<u8>) {
+    assert!(frame.len() > 9);
+
+    let frame_header = FrameHeader {
+        length: 
+            (frame[0] as u32) << 16 +
+            (frame[1] as u32) << 8 +
+            (frame[2] as u32),
+        frame_type: frame[3],
+        flags: frame[4],
+        stream_id:
+            ((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame[5]) as u32) << 24 +
+            (frame[6] as u32) << 16 +
+            (frame[7] as u32) << 8 +
+            (frame[8] as u32)
+    };
+
+    // TODO so far we have a "partial decompression" representation. A different representation is required to return each
+    // frame type from here, which as far as I understand is not easily expressed in Rust.
 }
