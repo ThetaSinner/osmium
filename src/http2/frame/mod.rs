@@ -15,11 +15,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-// This module has been made public because it makes easier to generate documentation
-// and because it does little harm to make it public, so long as the documentation makes
-// it clear how to use the library, and that this module is intended for internal use.
-pub mod hpack;
+pub mod data;
 
-pub mod header;
-pub mod temp_use_hpack;
-pub mod frame;
+pub trait HttpFrame {
+    fn get_length(&self) -> i32;
+
+    fn get_frame_type() -> u8;
+
+    fn get_flags(&self) -> u8;
+
+    fn get_payload(self) -> Vec<u8>;
+}
+
+pub fn build_frame<T: HttpFrame>(frame: T) -> Vec<u8> {
+    let mut result = Vec::new();
+
+    let length = frame.get_length();
+
+    assert_eq!((length >> 24) as u8, 0, "frame size error");
+    result.append((length >> 16) as u8);
+    result.append((length >> 8) as u8);
+    result.append(length as u8);
+
+    // TODO build the rest of the frame
+}
