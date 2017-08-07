@@ -19,6 +19,10 @@ pub mod data;
 
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
 
+// std
+use std::vec::IntoIter;
+
+// osmium
 pub use self::data::DataFrame;
 
 pub trait CompressibleHttpFrame {
@@ -63,23 +67,25 @@ pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
     result
 }
 
-pub fn decompress_frame(frame: Vec<u8>) {
-    assert!(frame.len() > 9);
+pub fn decompress_frame(frame: Vec<u8>) -> (FrameHeader, IntoIter<u8>) {
+    // a frame should always have a header which is 9 octets long.
+    assert!(frame.len() >= 9);
+
+    let mut frame_iter = frame.into_iter();
 
     let frame_header = FrameHeader {
-        length: 
-            (frame[0] as u32) << 16 +
-            (frame[1] as u32) << 8 +
-            (frame[2] as u32),
-        frame_type: frame[3],
-        flags: frame[4],
+        length:
+            (frame_iter.next().unwrap() as u32) << 16 +
+            (frame_iter.next().unwrap() as u32) << 8 +
+            (frame_iter.next().unwrap() as u32),
+        frame_type: frame_iter.next().unwrap(),
+        flags: frame_iter.next().unwrap(),
         stream_id:
-            ((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame[5]) as u32) << 24 +
-            (frame[6] as u32) << 16 +
-            (frame[7] as u32) << 8 +
-            (frame[8] as u32)
+            ((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame_iter.next().unwrap()) as u32) << 24 +
+            (frame_iter.next().unwrap() as u32) << 16 +
+            (frame_iter.next().unwrap() as u32) << 8 +
+            (frame_iter.next().unwrap() as u32)
     };
 
-    // TODO so far we have a "partial decompression" representation. A different representation is required to return each
-    // frame type from here, which as far as I understand is not easily expressed in Rust.
+    (frame_header, frame_iter)
 }
