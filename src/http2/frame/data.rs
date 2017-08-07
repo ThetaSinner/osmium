@@ -22,15 +22,18 @@ const DATA_FRAME_TYPE: u8 = 0x0;
 const FLAG_END_STREAM: u8 = 0x1;
 const FLAG_PADDED: u8 = 0x8;
 
-pub struct DataFrame {
+// std
+use std::vec::IntoIter;
+
+pub struct DataFrameCompressModel {
     flags: u8,
     pad_length: u8,
     payload: Vec<u8>
 }
 
-impl DataFrame {
+impl DataFrameCompressModel {
     pub fn new(end_stream: bool) -> Self {
-        DataFrame {
+        DataFrameCompressModel {
             flags: if end_stream {
                 FLAG_END_STREAM
             }
@@ -59,7 +62,7 @@ impl DataFrame {
     }
 }
 
-impl CompressibleHttpFrame for DataFrame {
+impl CompressibleHttpFrame for DataFrameCompressModel {
     fn get_length(&self) -> i32 {
         self.payload.len() as i32
     }
@@ -85,5 +88,43 @@ impl CompressibleHttpFrame for DataFrame {
         }
 
         result
+    }
+}
+
+pub struct DataFrame {
+    payload: String,
+    end_stream: bool
+}
+
+impl DataFrame {
+    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> DataFrame {
+        let pad_length = if frame_header.flags & FLAG_PADDED == FLAG_PADDED {
+            frame.next().unwrap()
+        }
+        else {
+            0
+        };
+
+        let mut payload = Vec::new();
+        for _ in 0..frame_header.length {
+            payload.push(frame.next().unwrap());
+        }
+
+        for _ in 0..pad_length {
+            frame.next().unwrap();
+        }
+
+        DataFrame {
+            payload: String::from_utf8(payload).unwrap(),
+            end_stream: frame_header.flags & FLAG_END_STREAM == FLAG_END_STREAM
+        }
+    }
+
+    pub fn get_payload(&self) -> &str {
+        &self.payload
+    }
+
+    pub fn is_end_stream(&self) -> bool {
+        self.end_stream
     }
 }
