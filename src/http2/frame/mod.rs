@@ -25,6 +25,12 @@ use std::vec::IntoIter;
 // osmium
 pub use self::data::DataFrame;
 
+// TODO the template layed out in this file and the data file will hopefully work
+// with the http2 transport mechanism, but in order to see the extent to which 
+// this code needs to handle streaming of partial frames etc there needs to be data 
+// to push into this module. Thus I'm leaving this for now and moving onto the 
+// transport code.
+
 pub trait CompressibleHttpFrame {
     fn get_length(&self) -> i32;
 
