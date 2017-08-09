@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
+// along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 use http2::hpack;
 use http2::header;

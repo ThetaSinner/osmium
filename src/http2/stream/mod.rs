@@ -15,13 +15,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-// This module has been made public because it makes easier to generate documentation
-// and because it does little harm to make it public, so long as the documentation makes
-// it clear how to use the library, and that this module is intended for internal use.
-pub mod hpack;
+pub mod state;
 
-pub mod header;
-pub mod temp_use_hpack;
-pub mod frame;
-pub mod stream;
-pub mod error;
+use self::state::StreamState;
+
+pub struct Stream {
+    state: StreamState
+}
+
+impl Stream {
+    pub fn new() -> Self {
+        Stream {
+            state: StreamState::Idle
+        }
+    }
+
+    pub fn recv(&mut self) {
+
+    }
+
+    pub fn send(&mut self) {
+
+    }
+}

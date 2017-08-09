@@ -15,13 +15,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-// This module has been made public because it makes easier to generate documentation
-// and because it does little harm to make it public, so long as the documentation makes
-// it clear how to use the library, and that this module is intended for internal use.
-pub mod hpack;
+// osmium
+use http2::frame::FrameHeader;
+use http2::error::ErrorCode;
 
-pub mod header;
-pub mod temp_use_hpack;
-pub mod frame;
-pub mod stream;
-pub mod error;
+pub enum StreamState {
+    Idle,
+    ReservedLocal,
+    ReservedRemote,
+    Open,
+    HalfClosedLocal,
+    HalfClosedRemote,
+    Closed
+}
+
+pub fn next_state(current_state: &StreamState, header: &FrameHeader) -> Result<StreamState, ErrorCode> {
+    match current_state {
+        &StreamState::Idle => {
+            // TODO
+        },
+        _ => {
+            // TODO
+        }
+    }
+
+    Ok(StreamState::Idle)
+}

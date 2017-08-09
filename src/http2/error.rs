@@ -13,36 +13,57 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
+// along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 pub enum ErrorCode {
     // The associated condition is not a result of an error. For example, a GOAWAY might include this code to indicate graceful shutdown of a connection.
-    NO_ERROR(0x0),
+    NO_ERROR,
     // The endpoint detected an unspecific protocol error. This error is for use when a more specific error code is not available.
-    PROTOCOL_ERROR(0x1),
+    PROTOCOL_ERROR,
     // The endpoint encountered an unexpected internal error.
-    INTERNAL_ERROR(0x2),
+    INTERNAL_ERROR,
     // The endpoint detected that its peer violated the flow-control protocol.
-    FLOW_CONTROL_ERROR(0x3),
+    FLOW_CONTROL_ERROR,
     // The endpoint sent a SETTINGS frame but did not receive a response in a timely manner. See Section 6.5.3 ("Settings Synchronization").
-    SETTINGS_TIMEOUT(0x4),
+    SETTINGS_TIMEOUT,
     // The endpoint received a frame after a stream was half-closed.
-    STREAM_CLOSED(0x5),
+    STREAM_CLOSED,
     // The endpoint received a frame with an invalid size.
-    FRAME_SIZE_ERROR(0x6),
+    FRAME_SIZE_ERROR,
     // The endpoint refused the stream prior to performing any application processing (see Section 8.1.4 for details).
-    REFUSED_STREAM(0x7),
+    REFUSED_STREAM,
     // Used by the endpoint to indicate that the stream is no longer needed.
-    CANCEL(0x8),
+    CANCEL,
     // The endpoint is unable to maintain the header compression context for the connection.
-    COMPRESSION_ERROR(0x9),
+    COMPRESSION_ERROR,
     // The connection established in response to a CONNECT request (Section 8.3) was reset or abnormally closed.
-    CONNECT_ERROR(0xa),
+    CONNECT_ERROR,
     // The endpoint detected that its peer is exhibiting a behavior that might be generating excessive load.
-    ENHANCE_YOUR_CALM(0xb),
+    ENHANCE_YOUR_CALM,
     // The underlying transport has properties that do not meet minimum security requirements (see Section 9.2).
-    INADEQUATE_SECURITY(0xc),
+    INADEQUATE_SECURITY,
     // The endpoint requires that HTTP/1.1 be used instead of HTTP/2.
-    HTTP_1_1_REQUIRED(0xd),
+    HTTP_1_1_REQUIRED
+}
+
+impl From<ErrorCode> for u32 {
+    fn from(error_code: ErrorCode) -> u32 {
+        match error_code {
+            ErrorCode::NO_ERROR => 0x0,
+            ErrorCode::PROTOCOL_ERROR => 0x1,
+            ErrorCode::INTERNAL_ERROR => 0x2,
+            ErrorCode::FLOW_CONTROL_ERROR => 0x3,
+            ErrorCode::SETTINGS_TIMEOUT => 0x4,
+            ErrorCode::STREAM_CLOSED => 0x5,
+            ErrorCode::FRAME_SIZE_ERROR => 0x6,
+            ErrorCode::REFUSED_STREAM => 0x7,
+            ErrorCode::CANCEL => 0x8,
+            ErrorCode::COMPRESSION_ERROR => 0x9,
+            ErrorCode::CONNECT_ERROR => 0xa,
+            ErrorCode::ENHANCE_YOUR_CALM => 0xb,
+            ErrorCode::INADEQUATE_SECURITY => 0xc,
+            ErrorCode::HTTP_1_1_REQUIRED => 0xd
+        }
+    }
 }
 
