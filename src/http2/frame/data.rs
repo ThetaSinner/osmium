@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
+// along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 use super::CompressibleHttpFrame;
 
@@ -45,16 +45,15 @@ impl DataFrameCompressModel {
         }
     }
 
+    // An input of 0 for pad_length is valid, and allows the payload length to 
+    // be increased by 1. Therefore, a non-zero check against pad_length is 
+    // not valid to check if padding should be included when this frame is 
+    // compressed. Use the flag instead.
     pub fn set_pad_length(&mut self, pad_length: u8) {
         self.pad_length = pad_length;
 
         // update the padded flag.
-        if pad_length == 0 {
-            self.flags |= FLAG_PADDED;
-        }
-        else {
-            self.flags &= !FLAG_PADDED;
-        }
+        self.flags |= FLAG_PADDED;
     }
 
     pub fn set_payload(&mut self, payload: Vec<u8>) {
@@ -64,7 +63,14 @@ impl DataFrameCompressModel {
 
 impl CompressibleHttpFrame for DataFrameCompressModel {
     fn get_length(&self) -> i32 {
-        self.payload.len() as i32
+        // The entire data frame payload is included in flow control, including
+        // the pad length and padding fields if present.
+        if self.flags & FLAG_PADDED == FLAG_PADDED {
+            (self.payload.len() + 1 + self.pad_length as usize) as i32
+        }
+        else {
+            self.payload.len() as i32
+        }
     }
 
     fn get_frame_type(&self) -> u8 {
@@ -77,7 +83,7 @@ impl CompressibleHttpFrame for DataFrameCompressModel {
 
     fn get_payload(self) -> Vec<u8> {
         let mut result = Vec::new();
-        if self.pad_length != 0 {
+        if self.flags & FLAG_PADDED == FLAG_PADDED {
             result.push(self.pad_length)
         }
         result.extend(self.payload);

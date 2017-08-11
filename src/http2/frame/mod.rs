@@ -16,7 +16,9 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 pub mod data;
+pub mod headers;
 
+// Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
 
 // std
