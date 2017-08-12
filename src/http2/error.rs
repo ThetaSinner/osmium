@@ -72,5 +72,25 @@ impl From<ErrorCode> for u32 {
     }
 }
 
+pub fn to_error_code(error_code: u32) -> Option<ErrorCode> {
+    match error_code {
+        0x0 => Some(ErrorCode::NoError),
+        0x1 => Some(ErrorCode::ProtocolError),
+        0x2 => Some(ErrorCode::InternalError),
+        0x3 => Some(ErrorCode::FlowControlError),
+        0x4 => Some(ErrorCode::SettingsTimeout),
+        0x5 => Some(ErrorCode::StreamClosed),
+        0x6 => Some(ErrorCode::FrameSizeError),
+        0x7 => Some(ErrorCode::RefusedStream),
+        0x8 => Some(ErrorCode::Cancel),
+        0x9 => Some(ErrorCode::CompressionError),
+        0xa => Some(ErrorCode::ConnectError),
+        0xb => Some(ErrorCode::EnhanceYourCalm),
+        0xc => Some(ErrorCode::InadequateSecurity),
+        0xd => Some(ErrorCode::Http11Required),
+        _ => None
+    }
+}
+
 pub enum ErrorName {
 }
