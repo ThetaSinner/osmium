@@ -20,6 +20,7 @@ pub mod headers;
 pub mod priority;
 pub mod reset_stream;
 pub mod settings;
+pub mod push_promise;
 
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
@@ -46,6 +47,7 @@ pub trait CompressibleHttpFrame {
     fn get_payload(self) -> Vec<u8>;
 }
 
+#[derive(Debug)]
 pub struct FrameHeader {
     pub length: u32,
     pub frame_type: u8,
