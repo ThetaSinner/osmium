@@ -168,7 +168,7 @@ impl PushPromiseFrame {
         }
     }
 
-    pub fn get_prromised_stream_identifier(&self) -> u32 {
+    pub fn get_promised_stream_identifier(&self) -> u32 {
         self.promised_stream_identifier
     }
 
