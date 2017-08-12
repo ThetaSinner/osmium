@@ -25,3 +25,4 @@ pub mod temp_use_hpack;
 pub mod frame;
 pub mod stream;
 pub mod error;
+pub mod settings;

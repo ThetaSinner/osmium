@@ -174,7 +174,7 @@ impl HeaderFrame {
             Some(Priority {
                 exclusive: stream_dependency_first_octet & STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK == STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK,
                 stream_dependency: 
-                    (stream_dependency_first_octet as u32) << 24 +
+                    ((stream_dependency_first_octet & !STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK) as u32) << 24 +
                     (frame.next().unwrap() as u32) << 16 +
                     (frame.next().unwrap() as u32) << 8 +
                     (frame.next().unwrap() as u32),

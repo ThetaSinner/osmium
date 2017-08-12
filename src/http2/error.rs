@@ -15,6 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+pub enum HttpError {
+    ConnectionError(ErrorCode, ErrorName),
+    StreamError(ErrorCode, ErrorName)
+}
+
 pub enum ErrorCode {
     // The associated condition is not a result of an error. For example, a GOAWAY might include this code to indicate graceful shutdown of a connection.
     NoError,
@@ -67,3 +72,5 @@ impl From<ErrorCode> for u32 {
     }
 }
 
+pub enum ErrorName {
+}
