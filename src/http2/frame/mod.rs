@@ -19,6 +19,7 @@ pub mod data;
 pub mod headers;
 pub mod priority;
 pub mod reset_stream;
+pub mod settings;
 
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;

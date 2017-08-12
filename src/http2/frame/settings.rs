@@ -24,7 +24,10 @@ const FLAG_ACK: u8 = 0x1;
 // std
 use std::vec::IntoIter;
 
-struct SettingsParameter {
+// osmium
+use http2::settings;
+
+pub struct SettingsParameter {
     name: settings::SettingName,
     value: u32
 }
@@ -52,15 +55,11 @@ impl SettingsFrameCompressModel {
             value: value
         })
     }
-
-    pub fn set_header_block_fragment(&mut self, header_block_fragment: Vec<u8>) {
-        self.header_block_fragment = header_block_fragment;
-    }
 }
 
 impl CompressibleHttpFrame for SettingsFrameCompressModel {
     fn get_length(&self) -> i32 {
-        6 * self.parameters.len()
+        6 * self.parameters.len() as i32
     }
 
     fn get_frame_type(&self) -> u8 {
@@ -80,10 +79,10 @@ impl CompressibleHttpFrame for SettingsFrameCompressModel {
             result.push(name as u8);
 
             let value = setting.value;
-            result.push((name >> 24) as u8);
-            result.push((name >> 16) as u8);
-            result.push((name >> 8) as u8);
-            result.push(name as u8);
+            result.push((value >> 24) as u8);
+            result.push((value >> 16) as u8);
+            result.push((value >> 8) as u8);
+            result.push(value as u8);
         }
 
         result
@@ -111,6 +110,11 @@ impl SettingsFrame {
             // Each settings parameter is 6 octets, so the payload length
             // should be a multiple of 6.
             assert_eq!(0, frame_header.length % 6);
+            
+            let mut settings_frame = SettingsFrame {
+                acknowledge: false,
+                parameters: Vec::new()
+            };
 
             for _ in 0..(frame_header.length / 6) {
                 let opt_name = settings::to_setting_name(
@@ -121,15 +125,17 @@ impl SettingsFrame {
                 // TODO handle error
                 assert!(opt_name.is_some());
 
-                self.parameters.push(SettingsParameter {
+                settings_frame.parameters.push(SettingsParameter {
                     name: opt_name.unwrap(),
                     value:
                         (frame.next().unwrap() as u32) << 24 +
                         (frame.next().unwrap() as u32) << 16 +
                         (frame.next().unwrap() as u32) << 8 +
                         frame.next().unwrap() as u32
-                })
+                });
             }
+
+            settings_frame
         }
     }
 
