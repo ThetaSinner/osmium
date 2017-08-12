@@ -117,22 +117,27 @@ impl SettingsFrame {
             };
 
             for _ in 0..(frame_header.length / 6) {
-                let opt_name = settings::to_setting_name(
+                let raw_name = 
                     (frame.next().unwrap() as u16) << 8 +
-                    (frame.next().unwrap() as u16)
+                    (frame.next().unwrap() as u16);
+
+                let opt_name = settings::to_setting_name(
+                    raw_name
                 );
 
-                // TODO handle error
-                assert!(opt_name.is_some());
-
-                settings_frame.parameters.push(SettingsParameter {
-                    name: opt_name.unwrap(),
-                    value:
-                        (frame.next().unwrap() as u32) << 24 +
-                        (frame.next().unwrap() as u32) << 16 +
-                        (frame.next().unwrap() as u32) << 8 +
-                        frame.next().unwrap() as u32
-                });
+                if opt_name.is_none() {
+                    info!("Unknown setting {:?} on settings frame with header {:?}", raw_name, frame_header);
+                }
+                else {
+                    settings_frame.parameters.push(SettingsParameter {
+                        name: opt_name.unwrap(),
+                        value:
+                            (frame.next().unwrap() as u32) << 24 +
+                            (frame.next().unwrap() as u32) << 16 +
+                            (frame.next().unwrap() as u32) << 8 +
+                            frame.next().unwrap() as u32
+                    });
+                }
             }
 
             settings_frame
