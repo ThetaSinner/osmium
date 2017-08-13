@@ -61,6 +61,7 @@ impl CompressibleHttpFrame for ContinuationFrameCompressModel {
 }
 
 pub struct ContinuationFrame {
+    end_headers: bool,
     header_block_fragment: Vec<u8>
 }
 
@@ -73,11 +74,16 @@ impl ContinuationFrame {
         }
 
         ContinuationFrame {
+            end_headers: frame_header.flags & FLAG_END_HEADERS == FLAG_END_HEADERS,
             header_block_fragment: header_block_fragment
         }
     }
 
     pub fn get_header_block_fragment(&self) -> &[u8] {
         self.header_block_fragment.as_slice()
+    }
+
+    pub fn is_end_headers(&self) -> bool {
+        self.end_headers
     }
 }
