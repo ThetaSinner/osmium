@@ -22,6 +22,7 @@ pub mod reset_stream;
 pub mod settings;
 pub mod push_promise;
 pub mod ping;
+pub mod go_away;
 
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;

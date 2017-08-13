@@ -126,7 +126,7 @@ impl GoAwayFrame {
 
         GoAwayFrame {
             last_stream_identifier: last_stream_identifier,
-            error_code: opt_error_code.unwrap,
+            error_code: opt_error_code.unwrap(),
             additional_debug_data: additional_debug_data
         }
     }
@@ -135,8 +135,8 @@ impl GoAwayFrame {
         self.last_stream_identifier
     }
 
-    pub fn get_error_code(&self) -> error::ErrorCode {
-        self.error_code
+    pub fn get_error_code(&self) -> &error::ErrorCode {
+        &self.error_code
     }
 
     pub fn get_additional_debug_data(&self) -> &[u8] {
