@@ -15,17 +15,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
+// std
+use std::vec::IntoIter;
 
-const PING_FRAME_TYPE: u8 = 0x6;
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
 
 const FLAG_ACK: u8 = 0x1;
 
 // the spec says '8 octets of opaque data', which can be anything? or should it be random
 const DEFAULT_PING_PAYLOAD: [u8; 8] = [0x9, 0x2, 0xa, 0x3, 0x2, 0xe, 0x1, 0xf];
-
-// std
-use std::vec::IntoIter;
 
 pub struct PingFrameCompressModel {
     flags: u8,
@@ -55,8 +55,8 @@ impl CompressibleHttpFrame for PingFrameCompressModel {
         8
     }
 
-    fn get_frame_type(&self) -> u8 {
-        PING_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Ping
     }
 
     fn get_flags(&self) -> u8 {

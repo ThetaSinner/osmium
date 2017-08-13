@@ -15,15 +15,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
+// std
+use std::vec::IntoIter;
 
-const DATA_FRAME_TYPE: u8 = 0x0;
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
 
 const FLAG_END_STREAM: u8 = 0x1;
 const FLAG_PADDED: u8 = 0x8;
-
-// std
-use std::vec::IntoIter;
 
 pub struct DataFrameCompressModel {
     flags: u8,
@@ -73,8 +73,8 @@ impl CompressibleHttpFrame for DataFrameCompressModel {
         }
     }
 
-    fn get_frame_type(&self) -> u8 {
-        DATA_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Data
     }
 
     fn get_flags(&self) -> u8 {

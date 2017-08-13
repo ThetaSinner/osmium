@@ -15,17 +15,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const SETTINGS_FRAME_TYPE: u8 = 0x4;
-
-const FLAG_ACK: u8 = 0x1;
-
 // std
 use std::vec::IntoIter;
 
 // osmium
 use http2::settings;
+use super::CompressibleHttpFrame;
+use super::FrameType;
+
+const FLAG_ACK: u8 = 0x1;
 
 pub struct SettingsParameter {
     name: settings::SettingName,
@@ -62,8 +60,8 @@ impl CompressibleHttpFrame for SettingsFrameCompressModel {
         6 * self.parameters.len() as i32
     }
 
-    fn get_frame_type(&self) -> u8 {
-        SETTINGS_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Settings
     }
 
     fn get_flags(&self) -> u8 {

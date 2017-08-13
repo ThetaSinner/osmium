@@ -15,12 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const RST_STREAM_FRAME_TYPE: u8 = 0x3;
-
 // std
 use std::vec::IntoIter;
+
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
 
 pub struct ResetStreamFrameCompressModel {
     error_code: u32
@@ -40,8 +40,8 @@ impl CompressibleHttpFrame for ResetStreamFrameCompressModel {
         4
     }
 
-    fn get_frame_type(&self) -> u8 {
-        RST_STREAM_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::ResetStream
     }
 
     fn get_flags(&self) -> u8 {

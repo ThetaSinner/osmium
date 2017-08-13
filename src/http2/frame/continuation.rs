@@ -15,14 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const CONTINUATION_FRAME_TYPE: u8 = 0x9;
-
-const FLAG_END_HEADERS: u8 = 0x4;
-
 // std
 use std::vec::IntoIter;
+
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
+
+const FLAG_END_HEADERS: u8 = 0x4;
 
 pub struct ContinuationFrameCompressModel {
     flags: u8,
@@ -47,8 +47,8 @@ impl CompressibleHttpFrame for ContinuationFrameCompressModel {
         self.header_block_fragment.len() as i32
     }
 
-    fn get_frame_type(&self) -> u8 {
-        CONTINUATION_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Continuation
     }
 
     fn get_flags(&self) -> u8 {

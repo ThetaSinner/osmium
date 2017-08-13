@@ -15,17 +15,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const GOAWAY_FRAME_TYPE: u8 = 0x7;
-
-const LAST_STREAM_IDENTIFIER_BIT_MASK: u8 = 0x80;
-
 // std
 use std::vec::IntoIter;
 
 // osmium
 use http2::error;
+use super::CompressibleHttpFrame;
+use super::FrameType;
+
+const LAST_STREAM_IDENTIFIER_BIT_MASK: u8 = 0x80;
 
 pub struct GoAwayFrameCompressModel {
     last_stream_identifier: u32,
@@ -50,8 +48,8 @@ impl CompressibleHttpFrame for GoAwayFrameCompressModel {
         8 + self.additional_debug_data.len() as i32
     }
 
-    fn get_frame_type(&self) -> u8 {
-        GOAWAY_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::GoAway
     }
 
     fn get_flags(&self) -> u8 {

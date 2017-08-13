@@ -15,14 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const PRIORITY_FRAME_TYPE: u8 = 0x2;
-
-const STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK: u8 = 0x80;
-
 // std
 use std::vec::IntoIter;
+
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
+
+const STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK: u8 = 0x80;
 
 pub struct PriorityFrameCompressModel {
     stream_dependency: u32,
@@ -46,8 +46,8 @@ impl CompressibleHttpFrame for PriorityFrameCompressModel {
         5
     }
 
-    fn get_frame_type(&self) -> u8 {
-        PRIORITY_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Priority
     }
 
     fn get_flags(&self) -> u8 {

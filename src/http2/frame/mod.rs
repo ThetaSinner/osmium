@@ -44,7 +44,7 @@ pub use self::data::DataFrame;
 pub trait CompressibleHttpFrame {
     fn get_length(&self) -> i32;
 
-    fn get_frame_type(&self) -> u8;
+    fn get_frame_type(&self) -> FrameType;
 
     fn get_flags(&self) -> u8;
 
@@ -54,9 +54,56 @@ pub trait CompressibleHttpFrame {
 #[derive(Debug)]
 pub struct FrameHeader {
     pub length: u32,
-    pub frame_type: u8,
+    pub frame_type: Option<FrameType>,
     pub flags: u8,
     pub stream_id: u32
+}
+
+#[derive(Debug)]
+pub enum FrameType {
+    Data,
+    Headers,
+    Priority,
+    ResetStream,
+    Settings,
+    PushPromise,
+    Ping,
+    GoAway,
+    WindowUpdate,
+    Continuation
+}
+
+impl From<FrameType> for u8 {
+    fn from(frame_type: FrameType) -> u8 {
+        match frame_type {
+            FrameType::Data => 0x0,
+            FrameType::Headers => 0x1,
+            FrameType::Priority => 0x2,
+            FrameType::ResetStream => 0x3,
+            FrameType::Settings => 0x4,
+            FrameType::PushPromise => 0x5,
+            FrameType::Ping => 0x6,
+            FrameType::GoAway => 0x7,
+            FrameType::WindowUpdate => 0x8,
+            FrameType::Continuation => 0x9
+        }
+    }
+}
+
+pub fn to_frame_type(frame_type: u8) -> Option<FrameType> {
+    match frame_type {
+        0x0 => Some(FrameType::Data),
+        0x1 => Some(FrameType::Headers),
+        0x2 => Some(FrameType::Priority),
+        0x3 => Some(FrameType::ResetStream),
+        0x4 => Some(FrameType::Settings),
+        0x5 => Some(FrameType::PushPromise),
+        0x6 => Some(FrameType::Ping),
+        0x7 => Some(FrameType::GoAway),
+        0x8 => Some(FrameType::WindowUpdate),
+        0x9 => Some(FrameType::Continuation),
+        _ => None
+    }
 }
 
 pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
@@ -71,7 +118,7 @@ pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
     result.push((length >> 8) as u8);
     result.push(length as u8);
 
-    result.push(frame.get_frame_type());
+    result.push(frame.get_frame_type() as u8);
     result.push(frame.get_flags());
 
     result.push(STREAM_IDENTIFIER_RESERVED_BIT_MASK & (stream_id >> 24) as u8);
@@ -95,7 +142,7 @@ pub fn decompress_frame(frame: Vec<u8>) -> (FrameHeader, IntoIter<u8>) {
             (frame_iter.next().unwrap() as u32) << 16 +
             (frame_iter.next().unwrap() as u32) << 8 +
             (frame_iter.next().unwrap() as u32),
-        frame_type: frame_iter.next().unwrap(),
+        frame_type: to_frame_type(frame_iter.next().unwrap()),
         flags: frame_iter.next().unwrap(),
         stream_id:
             ((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame_iter.next().unwrap()) as u32) << 24 +

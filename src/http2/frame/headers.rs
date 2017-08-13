@@ -15,9 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
+// std
+use std::vec::IntoIter;
 
-const HEADERS_FRAME_TYPE: u8 = 0x1;
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
 
 const FLAG_END_STREAM: u8 = 0x1;
 const FLAG_END_HEADERS: u8 = 0x4;
@@ -25,9 +28,6 @@ const FLAG_PADDED: u8 = 0x8;
 const FLAG_PRIORITY: u8 = 0x20;
 
 const STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK: u8 = 0x80;
-
-// std
-use std::vec::IntoIter;
 
 pub struct HeadersFrameCompressModel {
     flags: u8,
@@ -94,8 +94,8 @@ impl CompressibleHttpFrame for HeadersFrameCompressModel {
         length as i32
     }
 
-    fn get_frame_type(&self) -> u8 {
-        HEADERS_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::Headers
     }
 
     fn get_flags(&self) -> u8 {

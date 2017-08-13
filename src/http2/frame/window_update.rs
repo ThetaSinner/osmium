@@ -15,14 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use super::CompressibleHttpFrame;
-
-const WINDOW_UPDATE_FRAME_TYPE: u8 = 0x8;
-
-const WINDOW_SIZE_INCREMENT_BIT_MASK: u8 = 0x80;
-
 // std
 use std::vec::IntoIter;
+
+// osmium
+use super::CompressibleHttpFrame;
+use super::FrameType;
+
+const WINDOW_SIZE_INCREMENT_BIT_MASK: u8 = 0x80;
 
 pub struct WindowUpdateFrameCompressModel {
     window_size_increment: u32
@@ -42,8 +42,8 @@ impl CompressibleHttpFrame for WindowUpdateFrameCompressModel {
         4
     }
 
-    fn get_frame_type(&self) -> u8 {
-        WINDOW_UPDATE_FRAME_TYPE
+    fn get_frame_type(&self) -> FrameType {
+        FrameType::WindowUpdate
     }
 
     fn get_flags(&self) -> u8 {
