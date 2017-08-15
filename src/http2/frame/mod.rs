@@ -26,6 +26,8 @@ pub mod go_away;
 pub mod window_update;
 pub mod continuation;
 
+pub const FRAME_HEADER_SIZE: usize = 9;
+
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
 
@@ -131,13 +133,13 @@ pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
     result
 }
 
-pub fn decompress_frame(frame: Vec<u8>) -> (FrameHeader, IntoIter<u8>) {
+pub fn decompress_frame_header(frame: Vec<u8>) -> FrameHeader {
     // a frame should always have a header which is 9 octets long.
-    assert!(frame.len() >= 9);
+    assert!(frame.len() >= FRAME_HEADER_SIZE);
 
     let mut frame_iter = frame.into_iter();
 
-    let frame_header = FrameHeader {
+    FrameHeader {
         length:
             (frame_iter.next().unwrap() as u32) << 16 +
             (frame_iter.next().unwrap() as u32) << 8 +
@@ -149,7 +151,5 @@ pub fn decompress_frame(frame: Vec<u8>) -> (FrameHeader, IntoIter<u8>) {
             (frame_iter.next().unwrap() as u32) << 16 +
             (frame_iter.next().unwrap() as u32) << 8 +
             (frame_iter.next().unwrap() as u32)
-    };
-
-    (frame_header, frame_iter)
+    }
 }
