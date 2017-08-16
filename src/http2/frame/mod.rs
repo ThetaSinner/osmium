@@ -138,18 +138,18 @@ pub fn decompress_frame_header(frame: Vec<u8>) -> FrameHeader {
     assert!(frame.len() >= FRAME_HEADER_SIZE);
 
     let mut frame_iter = frame.into_iter();
-
+    
     FrameHeader {
         length:
-            (frame_iter.next().unwrap() as u32) << 16 +
-            (frame_iter.next().unwrap() as u32) << 8 +
+            ((frame_iter.next().unwrap() as u32) << 16) +
+            ((frame_iter.next().unwrap() as u32) << 8) +
             (frame_iter.next().unwrap() as u32),
         frame_type: to_frame_type(frame_iter.next().unwrap()),
         flags: frame_iter.next().unwrap(),
         stream_id:
-            ((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame_iter.next().unwrap()) as u32) << 24 +
-            (frame_iter.next().unwrap() as u32) << 16 +
-            (frame_iter.next().unwrap() as u32) << 8 +
+            (((STREAM_IDENTIFIER_RESERVED_BIT_MASK & frame_iter.next().unwrap()) as u32) << 24) +
+            ((frame_iter.next().unwrap() as u32) << 16) +
+            ((frame_iter.next().unwrap() as u32) << 8) +
             (frame_iter.next().unwrap() as u32)
     }
 }
