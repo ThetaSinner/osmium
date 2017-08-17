@@ -22,9 +22,6 @@ use tokio_core;
 use tokio_io::io::read_exact;
 use tokio_io::AsyncRead;
 
-// threadpool
-use threadpool;
-
 pub fn start_server() {
     // tokio event loop
     let mut event_loop = tokio_core::reactor::Core::new().unwrap();
@@ -33,9 +30,6 @@ pub fn start_server() {
     // create a listener for incoming tcp connections
     let addr = "127.0.0.1:8080".parse().unwrap();
     let listener = tokio_core::net::TcpListener::bind(&addr, &handle).unwrap();
-
-    // create a thread pool for incoming connections to run on
-    let thread_pool = threadpool::ThreadPool::new(10);
 
     // get a stream (infinite iterator) of incoming connections
     let server = listener.incoming().for_each(|(socket, _remote_addr)| {
@@ -52,7 +46,8 @@ pub fn start_server() {
             read_exact(reader, [0; frame::FRAME_HEADER_SIZE])
                 .map_err(|err| {
                     // TODO this prints then swallows any errors. should handle any io errors
-                    println!("Err {:?}", err);
+                    // handle error: connection closed results in unexpected eof error here
+                    println!("Error reading the frame header [{:?}]", err);
                     ()
                 })
                 .and_then(move |(reader, frame_header_buf)| {
