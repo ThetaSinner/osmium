@@ -10,6 +10,6 @@ data = bytes([
     0x0, 0x0, 0x0, 0x6 # 4 bytes for stream id
 ])
 my_socket.send(data)
-my_socket.send(bytes([0x0, 0x0, 0x0]))
+my_socket.send(bytes([0x0, 0x0, 0x0, 0x0, 0x0]))
 
 input("press any key to close the connection and end the script")

@@ -17,10 +17,13 @@
 
 // tokio
 use futures::{Stream, Future};
-use futures::future::{loop_fn, Loop};
+use futures::future::{self, loop_fn, Loop};
 use tokio_core;
-use tokio_io::io::read_exact;
+use tokio_io::io as tokio_io;
 use tokio_io::AsyncRead;
+
+// osmium
+use http2::frame;
 
 pub fn start_server() {
     // tokio event loop
@@ -41,21 +44,28 @@ pub fn start_server() {
             // this read exact will run on the event loop until enough bytes for an
             // http2 header frame have been read
 
-            use http2::frame;
-
-            read_exact(reader, [0; frame::FRAME_HEADER_SIZE])
+            tokio_io::read_exact(reader, [0; frame::FRAME_HEADER_SIZE])
                 .map_err(|err| {
                     // TODO this prints then swallows any errors. should handle any io errors
                     // handle error: connection closed results in unexpected eof error here
                     println!("Error reading the frame header [{:?}]", err);
                     ()
                 })
-                .and_then(move |(reader, frame_header_buf)| {
-                    println!("input data {:?}", frame_header_buf);
-
+                .and_then(move |(reader, frame_header_buf)| {                   
                     let frame_header = frame::decompress_frame_header(frame_header_buf.to_vec());
-
-                    println!("{:?}", frame_header);
+                    
+                    let mut buf = Vec::with_capacity(frame_header.length as usize);
+                    buf.resize(frame_header.length as usize, 0);
+                    tokio_io::read_exact(reader, buf)
+                        .map_err(|err| {
+                            // TODO handle the error
+                            println!("Error reading the frame payload [{:?}]", err);
+                            ()
+                        })
+                        .join(future::ok(frame_header))
+                })
+                .and_then(move |((reader, payload_buf), frame_header)| {
+                    println!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
 
                     Ok(Loop::Continue(reader))
                 })
