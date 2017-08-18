@@ -25,6 +25,7 @@ extern crate tokio_service;
 extern crate httparse;
 #[macro_use] extern crate log;
 extern crate pretty_env_logger;
+extern crate threadpool;
 
 pub mod http_version;
 pub mod http;
