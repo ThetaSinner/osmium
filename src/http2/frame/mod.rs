@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
+// along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 pub mod data;
 pub mod headers;
@@ -37,12 +37,6 @@ use std::vec::IntoIter;
 // osmium
 pub use self::data::DataFrame;
 
-// TODO the template layed out in this file and the data file will hopefully work
-// with the http2 transport mechanism, but in order to see the extent to which 
-// this code needs to handle streaming of partial frames etc there needs to be data 
-// to push into this module. Thus I'm leaving this for now and moving onto the 
-// transport code.
-
 pub trait CompressibleHttpFrame {
     fn get_length(&self) -> i32;
 
@@ -59,6 +53,12 @@ pub struct FrameHeader {
     pub frame_type: Option<FrameType>,
     pub flags: u8,
     pub stream_id: u32
+}
+
+#[derive(Debug)]
+pub struct Frame {
+    pub header: FrameHeader,
+    pub payload: Vec<u8>
 }
 
 #[derive(Debug)]
@@ -108,8 +108,10 @@ pub fn to_frame_type(frame_type: u8) -> Option<FrameType> {
     }
 }
 
-pub fn compress_frame<T>(frame: T, stream_id: u32) -> Vec<u8>
-    where T : CompressibleHttpFrame 
+pub type StreamId = u32;
+
+pub fn compress_frame<T>(frame: T, stream_id: StreamId) -> Vec<u8>
+    where T : CompressibleHttpFrame
 {
     let mut result = Vec::new();
 

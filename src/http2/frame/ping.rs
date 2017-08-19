@@ -91,7 +91,11 @@ impl PingFrame {
         }
     }
 
-    pub fn get_payload(&self) -> &[u8; 8] {
-        &self.payload
+    pub fn get_payload(&self) -> [u8; 8] {
+        self.payload
     }
+}
+
+pub fn is_acknowledge(flags: u8) -> bool {
+    flags & FLAG_ACK == FLAG_ACK
 }
