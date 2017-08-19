@@ -19,8 +19,9 @@
 use std::sync::mpsc;
 
 // tokio
-use futures::{Stream, Future};
+use futures::{Stream, Sink, Future};
 use futures::future::{self, loop_fn, Loop};
+use futures::sync::mpsc as futures_mpsc;
 use futures_cpupool;
 use tokio_core;
 use tokio_io::io as tokio_io;
@@ -49,11 +50,14 @@ pub fn start_server() {
 
         let (reader, writer) = socket.split();
 
+        let (mut ftx, frx) = futures_mpsc::channel(5);
         let (tx, rx) = mpsc::channel();
         thread_pool.execute(move || {
             let mut msg_iter = rx.iter();
             while let Some(msg) = msg_iter.next() {
                 println!("received frame on thread, {:?}", msg);
+                // echo the message
+                ftx = ftx.send(msg).wait().unwrap();
             }
         });
 
@@ -94,6 +98,13 @@ pub fn start_server() {
         });
 
         handle.spawn(reader_loop);
+
+        let send_loop = frx.for_each(|msg| {
+            println!("will push to network [{:?}]", msg);
+            Ok(())
+        });
+
+        handle.spawn(send_loop);
 
         Ok(())
     });
