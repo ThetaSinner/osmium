@@ -12,4 +12,6 @@ data = bytes([
 my_socket.send(data)
 my_socket.send(bytes([0x0, 0x0, 0x0, 0x0, 0x0]))
 
-input("press any key to close the connection and end the script")
+response = my_socket.recv(1024)
+my_socket.close()
+print(response)
