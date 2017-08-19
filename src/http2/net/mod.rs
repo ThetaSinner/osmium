@@ -123,7 +123,7 @@ pub fn start_server() {
 mod tests {
     use super::start_server;
 
-    #[test]
+    // MANUAL TESTING #[test]
     fn test_start_server() {
         println!("call start server");
         start_server();
