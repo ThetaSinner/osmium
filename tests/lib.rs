@@ -18,6 +18,7 @@
 extern crate osmium;
 #[macro_use] extern crate log;
 extern crate curl;
+extern crate rustc_version;
 
 // std
 use std::thread;
@@ -33,8 +34,29 @@ fn get_server_port_range_start() -> i32 {
     match env::var("SERVER_PORT_RANGE_START") {
         Ok(val) => val.parse::<i32>().unwrap(),
         Err(e) => {
-            warn!("Server port range start is not set {}", e);
-            8000
+            match rustc_version::version_meta() {
+                Ok(meta) => {
+                    match meta.channel {
+                        rustc_version::Channel::Stable => {
+                            5000
+                        },
+                        rustc_version::Channel::Beta => {
+                            6000
+                        },
+                        rustc_version::Channel::Nightly => {
+                            7000
+                        },
+                        _ => {
+                            info!("Unhandled rust channel, using default port");
+                            8000
+                        }
+                    }
+                },
+                Err(_) => {
+                    warn!("Server port range start is not set and cannot be determined from build channel. Using default");
+                    8000
+                }
+            }
         }
     }
 }
