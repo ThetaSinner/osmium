@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 
 // osmium
 use http2::frame as framing;
+use http2::error;
 
 pub struct Connection {
     send_frames: VecDeque<Vec<u8>>
@@ -43,7 +44,19 @@ impl Connection {
 
         match frame_type {
             &framing::FrameType::Ping => {
-                // TODO check that stream id is 0, otherwise protocol error.
+                if frame.header.stream_id != 0x0 {
+                    let http_error = error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::StreamIdentifierOnConnectionFrame
+                    );
+
+                    // TODO send last stream processed.
+                    let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
+
+                    // TODO check that the goaway should be sent with a stream id of 0x0.
+                    self.push_send_frame(go_away, 0x0);
+                    return;
+                }
 
                 let ping = framing::ping::PingFrame::new(&frame.header, &mut frame.payload.into_iter());
 

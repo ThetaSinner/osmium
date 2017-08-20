@@ -93,4 +93,15 @@ pub fn to_error_code(error_code: u32) -> Option<ErrorCode> {
 }
 
 pub enum ErrorName {
+    StreamIdentifierOnConnectionFrame
+}
+
+impl From<ErrorName> for Vec<u8> {
+    fn from(error_name: ErrorName) -> Vec<u8> {
+        match error_name {
+            ErrorName::StreamIdentifierOnConnectionFrame => {
+                "unexpected stream identifier on connection frame"
+            }
+        }.to_owned().as_bytes().to_vec()
+    }
 }

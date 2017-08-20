@@ -32,11 +32,18 @@ pub struct GoAwayFrameCompressModel {
 }
 
 impl GoAwayFrameCompressModel {
-    pub fn new() -> Self {
-        GoAwayFrameCompressModel {
-            last_stream_identifier: 0,
-            error_code: error::ErrorCode::NoError,
-            additional_debug_data: Vec::new()
+    pub fn new(last_stream_identifier: u32, error: error::HttpError) -> Self {
+        match error {
+            error::HttpError::ConnectionError(code, name) => {
+                GoAwayFrameCompressModel {
+                    last_stream_identifier: last_stream_identifier,
+                    error_code: code,
+                    additional_debug_data: Vec::from(name)
+                }
+            }
+            _ => {
+                panic!("goaway frame expects a connection error");
+            }
         }
     }
 }
