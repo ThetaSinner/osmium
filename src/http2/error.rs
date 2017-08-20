@@ -93,7 +93,8 @@ pub fn to_error_code(error_code: u32) -> Option<ErrorCode> {
 }
 
 pub enum ErrorName {
-    StreamIdentifierOnConnectionFrame
+    StreamIdentifierOnConnectionFrame,
+    PingPayloadLength
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -101,6 +102,9 @@ impl From<ErrorName> for Vec<u8> {
         match error_name {
             ErrorName::StreamIdentifierOnConnectionFrame => {
                 "unexpected stream identifier on connection frame"
+            },
+            ErrorName::PingPayloadLength => {
+                "ping payload length other than 8"
             }
         }.to_owned().as_bytes().to_vec()
     }

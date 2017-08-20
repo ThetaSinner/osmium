@@ -31,9 +31,6 @@ pub const FRAME_HEADER_SIZE: usize = 9;
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
 
-// std
-use std::vec::IntoIter;
-
 // osmium
 pub use self::data::DataFrame;
 

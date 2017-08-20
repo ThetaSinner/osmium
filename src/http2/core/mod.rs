@@ -44,32 +44,44 @@ impl Connection {
 
         match frame_type {
             &framing::FrameType::Ping => {
+                // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
                 if frame.header.stream_id != 0x0 {
-                    let http_error = error::HttpError::ConnectionError(
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::StreamIdentifierOnConnectionFrame
-                    );
-
-                    // TODO send last stream processed.
-                    let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
-
-                    // TODO check that the goaway should be sent with a stream id of 0x0.
-                    self.push_send_frame(go_away, 0x0);
+                    ));
+                    // (6.7) If a PING frame with a stream identifier other than 0x0 is received, then the recipient must
+                    // respond with a connection error.
+                    // That is, do not continue processing the ping.
                     return;
                 }
 
-                let ping = framing::ping::PingFrame::new(&frame.header, &mut frame.payload.into_iter());
+                // decode the incoming ping frame
+                let ping_frame_result = framing::ping::PingFrame::new(&frame.header, &mut frame.payload.into_iter());
 
-                if framing::ping::is_acknowledge(frame.header.flags) {
-                    panic!("can't handle ping response");
-                }
-                else {
-                    // TODO add a second constructor method which builds a response.
-                    let mut ping_response = framing::ping::PingFrameCompressModel::new();
-                    ping_response.set_acknowledge();
-                    ping_response.set_ping_payload(ping.get_payload());
+                match ping_frame_result {
+                    Ok(ping_frame) => {
+                        if framing::ping::is_acknowledge(frame.header.flags) {
+                            // TODO the server has no way of managing the connection thread. That is, the thread is only
+                            // active when frames are received which means the connection is active and there's no point
+                            // sending a ping.
+                            panic!("can't handle ping response");
+                        }
+                        else {
+                            // TODO add a second constructor method which builds a response.
+                            let mut ping_response = framing::ping::PingFrameCompressModel::new();
+                            ping_response.set_acknowledge();
+                            ping_response.set_ping_payload(ping_frame.get_payload());
 
-                    self.push_send_frame(ping_response, 0x0);
+                            // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
+                            self.push_send_frame(ping_response, 0x0);
+                        }
+                    },
+                    Err(e) => {
+                        // (6.7) the only error which decoding can produce is a FRAME_SIZE_ERROR, which is a connection error
+                        // so it is correct to build a GO_AWAY frame from it.
+                        self.push_send_go_away_frame(e);
+                    }
                 }
             }
             _ => {
@@ -83,6 +95,15 @@ impl Connection {
         self.send_frames.push_back(
             framing::compress_frame(frame, stream_id)
         );
+    }
+
+    fn push_send_go_away_frame(&mut self, http_error: error::HttpError) {
+        // TODO send last stream processed. Steams are not implemented yet so this will have to wait. For now send
+        // 0x0, which means no streams processed.
+        let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
+
+        // (6.8) A GOAWAY frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR.
+        self.push_send_frame(go_away, 0x0);
     }
 
     pub fn pull_frame(&mut self) -> Option<Vec<u8>> {
