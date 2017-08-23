@@ -58,7 +58,7 @@ pub struct Frame {
     pub payload: Vec<u8>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FrameType {
     Data,
     Headers,

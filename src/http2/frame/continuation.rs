@@ -87,3 +87,7 @@ impl ContinuationFrame {
         self.end_headers
     }
 }
+
+pub fn is_end_headers(flags: u8) -> bool {
+    flags & FLAG_END_HEADERS == FLAG_END_HEADERS
+}

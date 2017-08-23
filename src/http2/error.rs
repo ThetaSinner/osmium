@@ -94,7 +94,9 @@ pub fn to_error_code(error_code: u32) -> Option<ErrorCode> {
 
 pub enum ErrorName {
     StreamIdentifierOnConnectionFrame,
-    PingPayloadLength
+    MissingStreamIdentifierOnStreamFrame,
+    PingPayloadLength,
+    HeaderBlockInterupted
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -103,8 +105,14 @@ impl From<ErrorName> for Vec<u8> {
             ErrorName::StreamIdentifierOnConnectionFrame => {
                 "unexpected stream identifier on connection frame"
             },
+            ErrorName::MissingStreamIdentifierOnStreamFrame => {
+                "a frame which should be associated with a stream was received without a valid stream identifier"
+            }
             ErrorName::PingPayloadLength => {
                 "ping payload length other than 8"
+            },
+            ErrorName::HeaderBlockInterupted => {
+                "header block interupted"
             }
         }.to_owned().as_bytes().to_vec()
     }

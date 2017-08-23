@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+mod connection_frame_state;
+
 // std
 use std::collections::VecDeque;
 
@@ -23,13 +25,15 @@ use http2::frame as framing;
 use http2::error;
 
 pub struct Connection {
-    send_frames: VecDeque<Vec<u8>>
+    send_frames: VecDeque<Vec<u8>>,
+    frame_state_validator: connection_frame_state::ConnectionFrameStateValidator
 }
 
 impl Connection {
     pub fn new() -> Connection {
         Connection {
-            send_frames: VecDeque::new()
+            send_frames: VecDeque::new(),
+            frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new()
         }
     }
 
@@ -37,13 +41,26 @@ impl Connection {
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),
-            None => panic!("cannot handle frame type not recognised")
+            None => {
+                // TODO this can be handled gracefully, no need to crash.
+                panic!("cannot handle frame type not recognised");
+            }
         };
 
-        println!("{:?}", frame_type);
+        // Check that the incoming frame is what was expected on this connection.
+        if !self.frame_state_validator.is_okay(frame_type.clone(), frame.header.flags, frame.header.stream_id) {
+            // (6.2) A receiver MUST treat the receipt of any other type of frame 
+            // or a frame on a different stream as a connection error (Section 5.4.1) 
+            // of type PROTOCOL_ERROR.
+            self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                error::ErrorCode::ProtocolError,
+                error::ErrorName::HeaderBlockInterupted
+            ));
+            return;
+        };
 
         match frame_type {
-            &framing::FrameType::Ping => {
+            framing::FrameType::Ping => {
                 // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
                 if frame.header.stream_id != 0x0 {
                     self.push_send_go_away_frame(error::HttpError::ConnectionError(
@@ -83,6 +100,18 @@ impl Connection {
                         self.push_send_go_away_frame(e);
                     }
                 }
+            },
+            framing::FrameType::Headers => {
+                // (6.2) A HEADERS frame which is not associated with a stream is a connection error of type PROTOCOL_ERROR
+                if frame.header.stream_id == 0x0 {
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                // TODO finish this
             }
             _ => {
                 panic!("can't handle that frame type yet");
