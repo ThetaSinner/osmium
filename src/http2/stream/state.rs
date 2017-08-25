@@ -15,10 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-// osmium
-use http2::frame::FrameHeader;
-use http2::error::ErrorCode;
-
 pub enum StreamState {
     Idle,
     ReservedLocal,
@@ -29,15 +25,103 @@ pub enum StreamState {
     Closed
 }
 
-pub fn next_state(current_state: &StreamState, header: &FrameHeader) -> Result<StreamState, ErrorCode> {
-    match current_state {
-        &StreamState::Idle => {
-            // TODO
-        },
-        _ => {
-            // TODO
+pub struct StreamStateWrapper<S> {
+    state: S
+}
+
+// Declare types for each state.
+pub struct StateIdle;
+pub struct StateReservedLocal;
+pub struct StateReservedRemote;
+pub struct StateOpen;
+pub struct StateHalfClosedLocal;
+pub struct StateHalfClosedRemote;
+pub struct StateClosed;
+
+impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateOpen> {
+    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateOpen> {
+        StreamStateWrapper {
+            state: StateOpen
         }
     }
+}
 
-    Ok(StreamState::Idle)
+impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateReservedLocal> {
+    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateReservedLocal> {
+        StreamStateWrapper {
+            state: StateReservedLocal
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateReservedRemote> {
+    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateReservedRemote> {
+        StreamStateWrapper {
+            state: StateReservedRemote
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateReservedLocal>> for StreamStateWrapper<StateHalfClosedRemote> {
+    fn from(_state_wrapper: StreamStateWrapper<StateReservedLocal>) -> StreamStateWrapper<StateHalfClosedRemote> {
+        StreamStateWrapper {
+            state: StateHalfClosedRemote
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateReservedLocal>> for StreamStateWrapper<StateClosed> {
+    fn from(_state_wrapper: StreamStateWrapper<StateReservedLocal>) -> StreamStateWrapper<StateClosed> {
+        StreamStateWrapper {
+            state: StateClosed
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateReservedRemote>> for StreamStateWrapper<StateHalfClosedLocal> {
+    fn from(_state_wrapper: StreamStateWrapper<StateReservedRemote>) -> StreamStateWrapper<StateHalfClosedLocal> {
+        StreamStateWrapper {
+            state: StateHalfClosedLocal
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateReservedRemote>> for StreamStateWrapper<StateClosed> {
+    fn from(_state_wrapper: StreamStateWrapper<StateReservedRemote>) -> StreamStateWrapper<StateClosed> {
+        StreamStateWrapper {
+            state: StateClosed
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateHalfClosedRemote> {
+    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateHalfClosedRemote> {
+        StreamStateWrapper {
+            state: StateHalfClosedRemote
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateClosed> {
+    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateClosed> {
+        StreamStateWrapper {
+            state: StateClosed
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateHalfClosedLocal> {
+    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateHalfClosedLocal> {
+        StreamStateWrapper {
+            state: StateHalfClosedLocal
+        }
+    }
+}
+
+impl From<StreamStateWrapper<StateHalfClosedRemote>> for StreamStateWrapper<StateClosed> {
+    fn from(_state_wrapper: StreamStateWrapper<StateHalfClosedRemote>) -> StreamStateWrapper<StateClosed> {
+        StreamStateWrapper {
+            state: StateClosed
+        }
+    }
 }

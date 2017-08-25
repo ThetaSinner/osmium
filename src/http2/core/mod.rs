@@ -18,22 +18,25 @@
 mod connection_frame_state;
 
 // std
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 
 // osmium
 use http2::frame as framing;
 use http2::error;
+use http2::stream as streaming;
 
 pub struct Connection {
     send_frames: VecDeque<Vec<u8>>,
-    frame_state_validator: connection_frame_state::ConnectionFrameStateValidator
+    frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
+    streams: HashMap<framing::StreamId, streaming::Stream>
 }
 
 impl Connection {
     pub fn new() -> Connection {
         Connection {
             send_frames: VecDeque::new(),
-            frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new()
+            frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
+            streams: HashMap::new()
         }
     }
 
@@ -111,7 +114,7 @@ impl Connection {
                     return;
                 }
 
-                // TODO finish this
+                
             }
             _ => {
                 panic!("can't handle that frame type yet");
