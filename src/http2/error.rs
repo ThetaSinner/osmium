@@ -96,7 +96,8 @@ pub enum ErrorName {
     StreamIdentifierOnConnectionFrame,
     MissingStreamIdentifierOnStreamFrame,
     PingPayloadLength,
-    HeaderBlockInterupted
+    HeaderBlockInterupted,
+    StreamStateVoilation
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -113,6 +114,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::HeaderBlockInterupted => {
                 "header block interupted"
+            },
+            ErrorName::StreamStateVoilation => {
+                "stream state violation"
             }
         }.to_owned().as_bytes().to_vec()
     }

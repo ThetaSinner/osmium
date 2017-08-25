@@ -15,18 +15,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-pub enum StreamState {
-    Idle,
-    ReservedLocal,
-    ReservedRemote,
-    Open,
-    HalfClosedLocal,
-    HalfClosedRemote,
-    Closed
+pub enum StreamStateName {
+    Idle(StreamState<StateIdle>),
+    ReservedLocal(StreamState<StateReservedLocal>),
+    ReservedRemote(StreamState<StateReservedRemote>),
+    Open(StreamState<StateOpen>),
+    HalfClosedLocal(StreamState<StateHalfClosedLocal>),
+    HalfClosedRemote(StreamState<StateHalfClosedRemote>),
+    Closed(StreamState<StateClosed>)
 }
 
-pub struct StreamStateWrapper<S> {
+pub struct StreamState<S> {
     state: S
+}
+
+impl StreamState<StateIdle> {
+    pub fn new() -> StreamState<StateIdle> {
+        StreamState {
+            state: StateIdle
+        }
+    }
 }
 
 // Declare types for each state.
@@ -38,89 +46,99 @@ pub struct StateHalfClosedLocal;
 pub struct StateHalfClosedRemote;
 pub struct StateClosed;
 
-impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateOpen> {
-    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateOpen> {
-        StreamStateWrapper {
+// Declare valid transitions between states.
+
+impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateOpen> {
+    fn from(_state_wrapper: &StreamState<StateIdle>) -> StreamState<StateOpen> {
+        StreamState {
             state: StateOpen
         }
     }
 }
 
-impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateReservedLocal> {
-    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateReservedLocal> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateReservedLocal> {
+    fn from(_state_wrapper: &StreamState<StateIdle>) -> StreamState<StateReservedLocal> {
+        StreamState {
             state: StateReservedLocal
         }
     }
 }
 
-impl From<StreamStateWrapper<StateIdle>> for StreamStateWrapper<StateReservedRemote> {
-    fn from(_state_wrapper: StreamStateWrapper<StateIdle>) -> StreamStateWrapper<StateReservedRemote> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateReservedRemote> {
+    fn from(_state_wrapper: &StreamState<StateIdle>) -> StreamState<StateReservedRemote> {
+        StreamState {
             state: StateReservedRemote
         }
     }
 }
 
-impl From<StreamStateWrapper<StateReservedLocal>> for StreamStateWrapper<StateHalfClosedRemote> {
-    fn from(_state_wrapper: StreamStateWrapper<StateReservedLocal>) -> StreamStateWrapper<StateHalfClosedRemote> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateHalfClosedRemote> {
+    fn from(_state_wrapper: &StreamState<StateReservedLocal>) -> StreamState<StateHalfClosedRemote> {
+        StreamState {
             state: StateHalfClosedRemote
         }
     }
 }
 
-impl From<StreamStateWrapper<StateReservedLocal>> for StreamStateWrapper<StateClosed> {
-    fn from(_state_wrapper: StreamStateWrapper<StateReservedLocal>) -> StreamStateWrapper<StateClosed> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateClosed> {
+    fn from(_state_wrapper: &StreamState<StateReservedLocal>) -> StreamState<StateClosed> {
+        StreamState {
             state: StateClosed
         }
     }
 }
 
-impl From<StreamStateWrapper<StateReservedRemote>> for StreamStateWrapper<StateHalfClosedLocal> {
-    fn from(_state_wrapper: StreamStateWrapper<StateReservedRemote>) -> StreamStateWrapper<StateHalfClosedLocal> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateReservedRemote>> for StreamState<StateHalfClosedLocal> {
+    fn from(_state_wrapper: &StreamState<StateReservedRemote>) -> StreamState<StateHalfClosedLocal> {
+        StreamState {
             state: StateHalfClosedLocal
         }
     }
 }
 
-impl From<StreamStateWrapper<StateReservedRemote>> for StreamStateWrapper<StateClosed> {
-    fn from(_state_wrapper: StreamStateWrapper<StateReservedRemote>) -> StreamStateWrapper<StateClosed> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateReservedRemote>> for StreamState<StateClosed> {
+    fn from(_state_wrapper: &StreamState<StateReservedRemote>) -> StreamState<StateClosed> {
+        StreamState {
             state: StateClosed
         }
     }
 }
 
-impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateHalfClosedRemote> {
-    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateHalfClosedRemote> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateHalfClosedRemote> {
+    fn from(_state_wrapper: &StreamState<StateOpen>) -> StreamState<StateHalfClosedRemote> {
+        StreamState {
             state: StateHalfClosedRemote
         }
     }
 }
 
-impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateClosed> {
-    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateClosed> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateClosed> {
+    fn from(_state_wrapper: &StreamState<StateOpen>) -> StreamState<StateClosed> {
+        StreamState {
             state: StateClosed
         }
     }
 }
 
-impl From<StreamStateWrapper<StateOpen>> for StreamStateWrapper<StateHalfClosedLocal> {
-    fn from(_state_wrapper: StreamStateWrapper<StateOpen>) -> StreamStateWrapper<StateHalfClosedLocal> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateHalfClosedLocal> {
+    fn from(_state_wrapper: &StreamState<StateOpen>) -> StreamState<StateHalfClosedLocal> {
+        StreamState {
             state: StateHalfClosedLocal
         }
     }
 }
 
-impl From<StreamStateWrapper<StateHalfClosedRemote>> for StreamStateWrapper<StateClosed> {
-    fn from(_state_wrapper: StreamStateWrapper<StateHalfClosedRemote>) -> StreamStateWrapper<StateClosed> {
-        StreamStateWrapper {
+impl<'a> From<&'a StreamState<StateHalfClosedRemote>> for StreamState<StateClosed> {
+    fn from(_state_wrapper: &StreamState<StateHalfClosedRemote>) -> StreamState<StateClosed> {
+        StreamState {
+            state: StateClosed
+        }
+    }
+}
+
+impl<'a> From<&'a StreamState<StateHalfClosedLocal>> for StreamState<StateClosed> {
+    fn from(_state_wrapper: &StreamState<StateHalfClosedLocal>) -> StreamState<StateClosed> {
+        StreamState {
             state: StateClosed
         }
     }

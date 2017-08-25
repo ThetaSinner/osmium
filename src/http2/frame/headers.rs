@@ -155,7 +155,7 @@ pub struct HeaderFrame {
 }
 
 impl HeaderFrame {
-    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
         let mut read_length = 0;
 
         let pad_length = if frame_header.flags & FLAG_PADDED == FLAG_PADDED {

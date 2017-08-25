@@ -53,8 +53,21 @@ pub struct FrameHeader {
 }
 
 #[derive(Debug)]
+pub struct StreamFrameHeader {
+    pub length: u32,
+    pub frame_type: FrameType,
+    pub flags: u8
+}
+
+#[derive(Debug)]
 pub struct Frame {
     pub header: FrameHeader,
+    pub payload: Vec<u8>
+}
+
+#[derive(Debug)]
+pub struct StreamFrame {
+    pub header: StreamFrameHeader,
     pub payload: Vec<u8>
 }
 
