@@ -67,8 +67,17 @@ impl Stream {
                         (Some(new_state), None)
                     },
                     framing::FrameType::PushPromise => {
-                        panic!("can't handle push promise yet");
-                        (None, None)
+                        // (8.2) A client cannot push. Thus, servers MUST treat the receipt of a 
+                        // PUSH_PROMISE frame as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
+                        (
+                            None,
+                            Some(
+                                error::HttpError::ConnectionError(
+                                    error::ErrorCode::ProtocolError,
+                                    error::ErrorName::CannotPushToServer
+                                )
+                            )
+                        )
                     },
                     _ => {
                         // (5.1) Receiving any other frame than headers or push promise in this state

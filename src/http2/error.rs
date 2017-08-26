@@ -97,7 +97,8 @@ pub enum ErrorName {
     MissingStreamIdentifierOnStreamFrame,
     PingPayloadLength,
     HeaderBlockInterupted,
-    StreamStateVoilation
+    StreamStateVoilation,
+    CannotPushToServer
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -117,6 +118,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::StreamStateVoilation => {
                 "stream state violation"
+            },
+            ErrorName::CannotPushToServer => {
+                "cannot push to server"
             }
         }.to_owned().as_bytes().to_vec()
     }
