@@ -66,7 +66,7 @@ pub struct ResetStreamFrame {
 }
 
 impl ResetStreamFrame {
-    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
         // TODO handle error
         assert_eq!(4, frame_header.length);
 

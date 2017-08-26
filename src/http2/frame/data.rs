@@ -103,7 +103,7 @@ pub struct DataFrame {
 }
 
 impl DataFrame {
-    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> DataFrame {
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> DataFrame {
         let pad_length = if frame_header.flags & FLAG_PADDED == FLAG_PADDED {
             frame.next().unwrap()
         }

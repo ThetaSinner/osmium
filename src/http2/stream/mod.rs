@@ -22,16 +22,34 @@ use http2::error;
 
 pub struct Stream {
     state_name: state::StreamStateName,
+
     header_block: Vec<u8>,
-    header_block_read_to_process: bool
+    header_block_ready_to_process: bool,
+
+    payload: String,
+    payload_ready_to_process: bool,
+
+    trailer_header_block: Vec<u8>,
+    trailer_header_block_ready_to_process: bool,
+
+    send_window: u32
 }
 
 impl Stream {
     pub fn new() -> Self {
         Stream {
             state_name: state::StreamStateName::Idle(state::StreamState::<state::StateIdle>::new()),
+
             header_block: Vec::new(),
-            header_block_read_to_process: false
+            header_block_ready_to_process: false,
+
+            payload: String::new(),
+            payload_ready_to_process: false,
+
+            trailer_header_block: Vec::new(),
+            trailer_header_block_ready_to_process: false,
+
+            send_window: 0
         }
     }
 
@@ -49,7 +67,7 @@ impl Stream {
                         self.header_block.extend(headers_frame.get_header_block_fragment());
 
                         if headers_frame.is_end_headers() {
-                            self.header_block_read_to_process = true;
+                            self.header_block_ready_to_process = true;
                         }
 
                         if headers_frame.is_end_stream() {
@@ -94,13 +112,147 @@ impl Stream {
                     }
                 }
             },
+            state::StreamStateName::Open(ref state) => {
+                match frame.header.frame_type {
+                    framing::FrameType::Data => {
+                        let data_frame = framing::data::DataFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                        // If the client ended the stream then it becomes half closed remote.
+                        let new_state = if data_frame.is_end_stream() {
+                            Some(
+                                state::StreamStateName::HalfClosedRemote(state.into())
+                            )
+                        }
+                        else {
+                            None
+                        };
+
+                        self.payload = data_frame.get_payload().to_owned();
+                        self.payload_ready_to_process = true;
+
+                        (new_state, None)
+                    },
+                    framing::FrameType::Headers => {
+                        // Decode and receive the header block.
+                        let headers_frame = framing::headers::HeaderFrame::new(&frame.header, &mut frame.payload.into_iter());
+                        self.trailer_header_block.extend(headers_frame.get_header_block_fragment());
+
+                        if headers_frame.is_end_headers() {
+                            self.trailer_header_block_ready_to_process = true;
+                        }
+
+                        if headers_frame.is_end_stream() {
+                            (
+                                Some(
+                                    state::StreamStateName::HalfClosedRemote(state.into())
+                                ),
+                                None
+                            )
+                        }
+                        else {
+                            // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
+                            // flag set after receiving a final (non-informational) status code MUST 
+                            // treat the corresponding request or response as malformed (Section 8.1.2.6).
+                            (
+                                None,
+                                Some(
+                                    error::HttpError::StreamError(
+                                        error::ErrorCode::ProtocolError,
+                                        error::ErrorName::TrailerHeaderBlockShouldTerminateStream
+                                    )
+                                )
+                            )
+                        }
+                    },
+                    framing::FrameType::Priority => {
+                        unimplemented!();
+                    },
+                    framing::FrameType::ResetStream => {
+                        let reset_stream_frame = framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                        // Log the error code for the stream reset.
+                        if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
+                            warn!("Stream reset, error code {:?}", error_code);
+                        }
+                        else {
+                            error!("Stream was reset, with unrecognised error code");
+                        }
+
+                        (
+                            Some(state::StreamStateName::Closed(state.into())),
+                            None
+                        )
+                    },
+                    framing::FrameType::WindowUpdate => {
+                        // (6.9) The WINDOW_UPDATE frame can be specific to a stream or to the 
+                        // entire connection. In the former case, the frame's stream identifier 
+                        // indicates the affected stream; in the latter, the value "0" 
+                        // indicates that the entire connection is the subject of the frame.
+                        
+                        // Given the above we just assume that this window update is for this stream,
+                        // otherwise the frame wouldn't have been send to this stream.
+                        let window_update_frame = framing::window_update::WindowUpdateFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                        self.send_window += window_update_frame.get_window_size_increment();
+
+                        // TODO there is an error to be handled here if the frame decode fails.
+                        (None, None)
+                    },
+                    framing::FrameType::Continuation => {
+                        // TODO the server doesn't expect an arbitrary number of informational header blocks,
+                        // these only appear on responses.
+
+                        // The continuation frame must be preceded by a headers or push promise, without the 
+                        // end headers flag set. The server will not accept push promise and the connection
+                        // verifies that headers are followed by continuation frames.
+                        // TODO However, still need to check for continuation frames which are floating about
+                        // on their own. Note that this condition might actually catch this case.
+
+                        if self.header_block_ready_to_process {
+                            (
+                                None,
+                                Some(
+                                    error::HttpError::ConnectionError(
+                                        error::ErrorCode::ProtocolError,
+                                        error::ErrorName::UnexpectedContinuationFrame
+                                    )
+                                )
+                            )
+                        }
+                        else {
+                            let continuation_frame = framing::continuation::ContinuationFrame::new(&frame.header, &mut frame.payload.into_iter());
+                            self.header_block.extend(continuation_frame.get_header_block_fragment());
+
+                            if continuation_frame.is_end_headers() {
+                                self.header_block_ready_to_process = true;
+                            }
+
+                            // TODO handle continuation frame decode error.
+                            (None, None)
+                        }                        
+                    },
+                    _ => {
+                        // Any frame is valid in this state, but we must handle all type frame types in the enum to make rust happy.
+                        // TODO this should be an internal server error if one of the types not covered is actually received here.
+                        (
+                            None,
+                            Some(
+                                error::HttpError::ConnectionError(
+                                    error::ErrorCode::ProtocolError,
+                                    error::ErrorName::StreamStateVoilation
+                                )
+                            )
+                        )
+                    }
+                }
+            },
             _ => {
                 panic!("state not handled yet");
                 (None, None)
             }
         };
 
-        if self.header_block_read_to_process {
+        if self.header_block_ready_to_process {
             self.process_header_block();
         }
 

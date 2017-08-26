@@ -20,6 +20,7 @@ pub enum HttpError {
     StreamError(ErrorCode, ErrorName)
 }
 
+#[derive(Debug)]
 pub enum ErrorCode {
     // The associated condition is not a result of an error. For example, a GOAWAY might include this code to indicate graceful shutdown of a connection.
     NoError,
@@ -98,7 +99,9 @@ pub enum ErrorName {
     PingPayloadLength,
     HeaderBlockInterupted,
     StreamStateVoilation,
-    CannotPushToServer
+    CannotPushToServer,
+    TrailerHeaderBlockShouldTerminateStream,
+    UnexpectedContinuationFrame
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -121,6 +124,12 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::CannotPushToServer => {
                 "cannot push to server"
+            }
+            ErrorName::TrailerHeaderBlockShouldTerminateStream => {
+                "the trailer header block should terminate the stream"
+            },
+            ErrorName::UnexpectedContinuationFrame => {
+                "unexpected continuation frame"
             }
         }.to_owned().as_bytes().to_vec()
     }

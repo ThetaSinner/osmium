@@ -66,7 +66,7 @@ pub struct ContinuationFrame {
 }
 
 impl ContinuationFrame {
-    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
         let mut header_block_fragment = Vec::new();
 
         for _ in 0..frame_header.length {

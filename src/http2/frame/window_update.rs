@@ -72,7 +72,8 @@ pub struct WindowUpdateFrame {
 }
 
 impl WindowUpdateFrame {
-    pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
+    // TODO going to need to be able to decode for a stream and the connection.
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
         // TODO handle error
         assert_eq!(4, frame_header.length);
 
