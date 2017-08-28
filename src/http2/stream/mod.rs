@@ -185,7 +185,7 @@ impl Stream {
                         // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
                         // flag set after receiving a final (non-informational) status code MUST 
                         // treat the corresponding request or response as malformed (Section 8.1.2.6).
-                        if self.should_headers_frame_end_stream() {
+                        if should_end_stream {
                             if headers_frame.is_end_stream() {
                                 (
                                     Some(
