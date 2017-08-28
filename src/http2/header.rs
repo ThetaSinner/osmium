@@ -95,6 +95,10 @@ impl Headers {
     pub fn len(&self) -> usize {
         self.headers.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.headers.is_empty()
+    }
 }
 
 // Convert `HeaderName` enum values to string for serialisation 

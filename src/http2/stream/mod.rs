@@ -19,18 +19,44 @@ pub mod state;
 
 use http2::frame as framing;
 use http2::error;
+use http2::header;
+use http2::hpack::{context as hpack_context, unpack as hpack_unpack};
+
+pub struct StreamRequest {
+    headers: header::Headers,
+    payload: Option<String>,
+    trailer_headers: Option<header::Headers>
+}
+
+impl StreamRequest {
+    // TODO will return an error.
+    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_context: &mut hpack_context::Context) {
+        let decoded = hpack_unpack::unpack(temp_header_block, hpack_context);
+
+        // TODO can the header block be empty? because that will break the logic below.
+
+        if self.headers.is_empty() {
+            // If no request headers have been received then these are the request headers.
+            self.headers = decoded.headers;
+        }
+        else if self.trailer_headers.is_none() {
+            // If no trailer headers have been received then these are the tailer headers.
+            self.trailer_headers = Some(decoded.headers);
+        }
+        else {
+            // TODO handle error. We have received all the header blocks we were expecting, but received
+            // a request to process another.
+            panic!("unexpected header block");
+        }
+    }
+}
 
 pub struct Stream {
     state_name: state::StreamStateName,
 
-    header_block: Vec<u8>,
-    header_block_ready_to_process: bool,
+    temp_header_block: Vec<u8>,
 
-    payload: String,
-    payload_ready_to_process: bool,
-
-    trailer_header_block: Vec<u8>,
-    trailer_header_block_ready_to_process: bool,
+    request: StreamRequest,
 
     send_window: u32
 }
@@ -40,20 +66,22 @@ impl Stream {
         Stream {
             state_name: state::StreamStateName::Idle(state::StreamState::<state::StateIdle>::new()),
 
-            header_block: Vec::new(),
-            header_block_ready_to_process: false,
+            temp_header_block: Vec::new(),
 
-            payload: String::new(),
-            payload_ready_to_process: false,
-
-            trailer_header_block: Vec::new(),
-            trailer_header_block_ready_to_process: false,
+            request: StreamRequest {
+                headers: header::Headers::new(),
+                payload: None,
+                trailer_headers: None
+            },
 
             send_window: 0
         }
     }
 
-    pub fn recv(&mut self, frame: framing::StreamFrame) -> Option<error::HttpError> {
+    // Note that unpacking headers is stateful, and we can only borrow the connection's context mutably once.
+    pub fn recv(&mut self, frame: framing::StreamFrame, hpack_context: &mut hpack_context::Context) -> Option<error::HttpError> {
+        // TODO used a named tuple for this so that the errors are better and 
+        // it is clearer where the yields are in the block below.
         let (opt_new_state, opt_err) = match self.state_name {
             state::StreamStateName::Idle(ref state) => {
                 // (5.1) In the idle state we can receive headers and push promise frames.
@@ -64,10 +92,14 @@ impl Stream {
 
                         // Decode and receive the header block.
                         let headers_frame = framing::headers::HeaderFrame::new(&frame.header, &mut frame.payload.into_iter());
-                        self.header_block.extend(headers_frame.get_header_block_fragment());
+                        self.temp_header_block.extend(headers_frame.get_header_block_fragment());
 
+                        // If the headers block is complete then unpack it immediately.
                         if headers_frame.is_end_headers() {
-                            self.header_block_ready_to_process = true;
+                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+
+                            // TODO this only removes values from the vector, it doesn't change the allocated capacity.
+                            self.temp_header_block.clear();
                         }
 
                         if headers_frame.is_end_stream() {
@@ -127,41 +159,55 @@ impl Stream {
                             None
                         };
 
-                        self.payload = data_frame.get_payload().to_owned();
-                        self.payload_ready_to_process = true;
+                        self.request.payload = Some(
+                            data_frame.get_payload().to_owned()
+                        );
 
                         (new_state, None)
                     },
                     framing::FrameType::Headers => {
                         // Decode and receive the header block.
                         let headers_frame = framing::headers::HeaderFrame::new(&frame.header, &mut frame.payload.into_iter());
-                        self.trailer_header_block.extend(headers_frame.get_header_block_fragment());
+                        self.temp_header_block.extend(headers_frame.get_header_block_fragment());
+
+                        // This needs to be checked before possibly processing this headers. Processing the headers
+                        // changes the state and therefore MAY change this value. Checking before is correct, because
+                        // it is this header frame which needs to be checked for end stream rather than the next one.
+                        let should_end_stream = self.should_headers_frame_end_stream();
 
                         if headers_frame.is_end_headers() {
-                            self.trailer_header_block_ready_to_process = true;
+                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+
+                            // TODO this only removes values from the vector, it doesn't change the allocated capacity.
+                            self.temp_header_block.clear();
                         }
 
-                        if headers_frame.is_end_stream() {
-                            (
-                                Some(
-                                    state::StreamStateName::HalfClosedRemote(state.into())
-                                ),
-                                None
-                            )
-                        }
-                        else {
-                            // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
-                            // flag set after receiving a final (non-informational) status code MUST 
-                            // treat the corresponding request or response as malformed (Section 8.1.2.6).
-                            (
-                                None,
-                                Some(
-                                    error::HttpError::StreamError(
-                                        error::ErrorCode::ProtocolError,
-                                        error::ErrorName::TrailerHeaderBlockShouldTerminateStream
+                        // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
+                        // flag set after receiving a final (non-informational) status code MUST 
+                        // treat the corresponding request or response as malformed (Section 8.1.2.6).
+                        if self.should_headers_frame_end_stream() {
+                            if headers_frame.is_end_stream() {
+                                (
+                                    Some(
+                                        state::StreamStateName::HalfClosedRemote(state.into())
+                                    ),
+                                    None
+                                )
+                            }
+                            else {
+                                (
+                                    None,
+                                    Some(
+                                        error::HttpError::StreamError(
+                                            error::ErrorCode::ProtocolError,
+                                            error::ErrorName::TrailerHeaderBlockShouldTerminateStream
+                                        )
                                     )
                                 )
-                            )
+                            }
+                        }
+                        else {
+                            (None, None)
                         }
                     },
                     framing::FrameType::Priority => {
@@ -204,11 +250,13 @@ impl Stream {
 
                         // The continuation frame must be preceded by a headers or push promise, without the 
                         // end headers flag set. The server will not accept push promise and the connection
-                        // verifies that headers are followed by continuation frames.
-                        // TODO However, still need to check for continuation frames which are floating about
-                        // on their own. Note that this condition might actually catch this case.
-
-                        if self.header_block_ready_to_process {
+                        // verifies that headers are followed by continuation frames. This condition checks
+                        // that this continuation is preceded by another frame which contained headers.
+                        if self.temp_header_block.is_empty() {
+                            // (6.10) A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or 
+                            // CONTINUATION frame without the END_HEADERS flag set. 
+                            // A recipient that observes violation of this rule MUST respond with a 
+                            // connection error (Section 5.4.1) of type PROTOCOL_ERROR
                             (
                                 None,
                                 Some(
@@ -221,10 +269,13 @@ impl Stream {
                         }
                         else {
                             let continuation_frame = framing::continuation::ContinuationFrame::new(&frame.header, &mut frame.payload.into_iter());
-                            self.header_block.extend(continuation_frame.get_header_block_fragment());
+                            self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
 
                             if continuation_frame.is_end_headers() {
-                                self.header_block_ready_to_process = true;
+                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                                
+                                // TODO this only removes values from the vector, it doesn't change the allocated capacity.
+                                self.temp_header_block.clear();
                             }
 
                             // TODO handle continuation frame decode error.
@@ -252,10 +303,6 @@ impl Stream {
             }
         };
 
-        if self.header_block_ready_to_process {
-            self.process_header_block();
-        }
-
         if let Some(new_state) = opt_new_state {
             self.state_name = new_state;
         }
@@ -267,7 +314,9 @@ impl Stream {
 
     }
 
-    fn process_header_block(&mut self) {
-        // TODO use the hpack module to process the header block
+    fn should_headers_frame_end_stream(&self) -> bool {
+        // If the request headers have already been received, but another headers frame is
+        // being processed then is must end the stream.
+        !self.request.headers.is_empty()
     }
 }
