@@ -101,7 +101,9 @@ pub enum ErrorName {
     StreamStateVoilation,
     CannotPushToServer,
     TrailerHeaderBlockShouldTerminateStream,
-    UnexpectedContinuationFrame
+    UnexpectedContinuationFrame,
+    UnexpectedFrameOnHalfClosedStream,
+    StreamIsClosed
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -130,6 +132,12 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::UnexpectedContinuationFrame => {
                 "unexpected continuation frame"
+            },
+            ErrorName::UnexpectedFrameOnHalfClosedStream => {
+                "unexpected frame on half closed stream"
+            }
+            ErrorName::StreamIsClosed => {
+                "stream is closed"
             }
         }.to_owned().as_bytes().to_vec()
     }

@@ -248,7 +248,7 @@ impl Stream {
                         // TODO the server doesn't expect an arbitrary number of informational header blocks,
                         // these only appear on responses.
 
-                        // The continuation frame must be preceded by a headers or push promise, without the 
+                        // The continuation frame must be preceded by a headers or push promise, without the
                         // end headers flag set. The server will not accept push promise and the connection
                         // verifies that headers are followed by continuation frames. This condition checks
                         // that this continuation is preceded by another frame which contained headers.
@@ -280,7 +280,7 @@ impl Stream {
 
                             // TODO handle continuation frame decode error.
                             (None, None)
-                        }                        
+                        }
                     },
                     _ => {
                         // Any frame is valid in this state, but we must handle all type frame types in the enum to make rust happy.
@@ -297,6 +297,116 @@ impl Stream {
                     }
                 }
             },
+            state::StreamStateName::HalfClosedRemote(ref state) => {
+                match frame.header.frame_type {
+                    // This looks like a deviation from the spec. In fact it's not. Continuation frames are 
+                    // logically part of another frame. However, the first frame in the sequence may half close
+                    // the stream. This means that the state will transition before the headers are fully
+                    // received. So the continuation frames are received here if and only if a headers has
+                    // already started to be received.
+                    // This is invisible to the peer.
+                    framing::FrameType::Continuation => {
+                        if self.temp_header_block.is_empty() {
+                            // TODO This should possibly return a stream error of type stream closed, because this 
+                            // frame should not have been sent in this state.
+
+                            // (6.10) A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or 
+                            // CONTINUATION frame without the END_HEADERS flag set. 
+                            // A recipient that observes violation of this rule MUST respond with a 
+                            // connection error (Section 5.4.1) of type PROTOCOL_ERROR
+                            (
+                                None,
+                                Some(
+                                    error::HttpError::ConnectionError(
+                                        error::ErrorCode::ProtocolError,
+                                        error::ErrorName::UnexpectedContinuationFrame
+                                    )
+                                )
+                            )
+                        }
+                        else {
+                            let continuation_frame = framing::continuation::ContinuationFrame::new(&frame.header, &mut frame.payload.into_iter());
+                            self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
+
+                            if continuation_frame.is_end_headers() {
+                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                                
+                                // TODO this only removes values from the vector, it doesn't change the allocated capacity.
+                                self.temp_header_block.clear();
+                            }
+
+                            // TODO handle continuation frame decode error.
+                            (None, None)
+                        }
+                    },
+                    framing::FrameType::WindowUpdate => {
+                        let window_update_frame = framing::window_update::WindowUpdateFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                        self.send_window += window_update_frame.get_window_size_increment();
+
+                        // TODO there is an error to be handled here if the frame decode fails.
+                        (None, None)
+                    },
+                    framing::FrameType::Priority => {
+                        unimplemented!();
+                    },
+                    framing::FrameType::ResetStream => {
+                        let reset_stream_frame = framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                        // Log the error code for the stream reset.
+                        if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
+                            warn!("Stream reset, error code {:?}", error_code);
+                        }
+                        else {
+                            error!("Stream was reset, with unrecognised error code");
+                        }
+
+                        (
+                            Some(state::StreamStateName::Closed(state.into())),
+                            None
+                        )
+                    },
+                    _ => {
+                        // (5.1) If an endpoint receives additional frames, other than WINDOW_UPDATE, PRIORITY, 
+                        // or RST_STREAM, for a stream that is in this state, it MUST respond with a stream 
+                        // error (Section 5.4.2) of type STREAM_CLOSED.
+                        (
+                            None,
+                            Some(
+                                error::HttpError::StreamError(
+                                    error::ErrorCode::StreamClosed,
+                                    error::ErrorName::UnexpectedFrameOnHalfClosedStream
+                                )
+                            )
+                        )
+                    }
+                }
+            },
+            state::StreamStateName::Closed(ref state) => {
+                match frame.header.frame_type {
+                    framing::FrameType::Priority => {
+                        // TODO log and discard instead panic.
+                        unimplemented!();
+                    },
+                    _ => {
+                        // TODO there is more to do here. There is a small race condition, where the stream might be closed
+                        // because we've sent a reset or end stream but they haven't been received by the peer.
+                        // There are some rules about what can be discarded without error, and what is a more serious error.
+
+                        // (5.1) An endpoint that receives any frame other than PRIORITY after receiving 
+                        // a RST_STREAM MUST treat that as a stream error (Section 5.4.2) of type STREAM_CLOSED.
+                        (
+                            None,
+                            Some(
+                                error::HttpError::StreamError(
+                                    error::ErrorCode::StreamClosed,
+                                    error::ErrorName::StreamIsClosed
+                                )
+                            )
+                        )
+                    }
+                }
+            }
             _ => {
                 panic!("state not handled yet");
                 (None, None)
