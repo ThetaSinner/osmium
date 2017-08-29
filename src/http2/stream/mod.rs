@@ -22,6 +22,7 @@ use http2::error;
 use http2::header;
 use http2::hpack::{context as hpack_context, unpack as hpack_unpack};
 
+#[derive(Debug)]
 pub struct StreamRequest {
     headers: header::Headers,
     payload: Option<String>,
@@ -422,6 +423,8 @@ impl Stream {
                 (None, None)
             }
         };
+
+        println!("{:?}", self.request);
 
         if let Some(new_state) = opt_new_state {
             self.state_name = new_state;

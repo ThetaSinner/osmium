@@ -152,11 +152,11 @@ impl Server {
 
 #[cfg(test)]
 mod tests {
-    use super::start_server;
+    use super::Server;
 
     // MANUAL TESTING #[test]
     fn test_start_server() {
-        println!("call start server");
-        start_server();
+        println!("start server");
+        Server::new().start_server();
     }
 }

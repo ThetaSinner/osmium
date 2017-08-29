@@ -76,7 +76,7 @@ pub struct PingFrame {
 impl PingFrame {
     pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Result<Self, error::HttpError> {
         // (6.7) PING frame with length field other than 8 is a connection error of type FRAME_SIZE_ERROR.
-        if frame_header.length == 8 {
+        if frame_header.length != 8 {
             return Err(error::HttpError::ConnectionError(
                 error::ErrorCode::FrameSizeError,
                 error::ErrorName::PingPayloadLength
