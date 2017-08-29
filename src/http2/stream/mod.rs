@@ -406,7 +406,7 @@ impl Stream {
                         )
                     }
                 }
-            }
+            },
             _ => {
                 panic!("state not handled yet");
                 (None, None)
