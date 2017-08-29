@@ -408,6 +408,16 @@ impl Stream {
                 }
             },
             _ => {
+                // The following states are not handled.
+
+                // Reserved remote: Cannot enter this state, because any incoming push promise to the 
+                // server will be rejected.
+
+                // Half closed local: No access from reserved remote, as above. Therefore, this state can only be 
+                // reached if we send end stream before the client ends stream.
+                // TODO This might happen if the request is processed before the trailer headers are received for
+                // example. So this needs to go down as a case to be handled later.
+
                 panic!("state not handled yet");
                 (None, None)
             }
