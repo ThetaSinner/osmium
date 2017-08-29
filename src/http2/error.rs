@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+#[derive(Debug)]
 pub enum HttpError {
     ConnectionError(ErrorCode, ErrorName),
     StreamError(ErrorCode, ErrorName)
@@ -93,6 +94,7 @@ pub fn to_error_code(error_code: u32) -> Option<ErrorCode> {
     }
 }
 
+#[derive(Debug)]
 pub enum ErrorName {
     StreamIdentifierOnConnectionFrame,
     MissingStreamIdentifierOnStreamFrame,

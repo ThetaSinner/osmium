@@ -24,18 +24,23 @@ use std::collections::{VecDeque, HashMap};
 use http2::frame as framing;
 use http2::error;
 use http2::stream as streaming;
+use http2::hpack::context as hpack_context;
 
-pub struct Connection {
+pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
     frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
+
+    hpack_context: hpack_context::Context<'a>,
+
     streams: HashMap<framing::StreamId, streaming::Stream>
 }
 
-impl Connection {
-    pub fn new() -> Connection {
+impl<'a> Connection<'a> {
+    pub fn new(hpack_context: hpack_context::Context) -> Connection {
         Connection {
             send_frames: VecDeque::new(),
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
+            hpack_context: hpack_context,
             streams: HashMap::new()
         }
     }
@@ -114,8 +119,25 @@ impl Connection {
                     return;
                 }
 
-                
-            }
+                let stream = self.streams
+                    .entry(frame.header.stream_id)
+                    .or_insert(streaming::Stream::new());
+
+                let stream_response = stream.recv(framing::StreamFrame {
+                    // TODO constructor for converting the header.
+                    header: framing::StreamFrameHeader {
+                        length: frame.header.length,
+                        frame_type: frame_type,
+                        flags: frame.header.flags
+                    },
+                    payload: frame.payload
+                }, &mut self.hpack_context);
+
+                // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
+                if let Some(err) = stream_response {
+                    error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
+                }
+            },
             _ => {
                 panic!("can't handle that frame type yet");
             }
