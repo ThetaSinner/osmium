@@ -424,7 +424,7 @@ impl Stream {
             }
         };
 
-        println!("{:?}", self.request);
+        println!("where's the stream at? {:?}", self.request);
 
         if let Some(new_state) = opt_new_state {
             self.state_name = new_state;
