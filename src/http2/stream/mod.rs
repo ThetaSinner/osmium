@@ -58,6 +58,7 @@ pub struct Stream {
     temp_header_block: Vec<u8>,
 
     request: StreamRequest,
+    started_processing_request: bool
 
     send_window: u32
 }
@@ -74,6 +75,7 @@ impl Stream {
                 payload: None,
                 trailer_headers: None
             },
+            started_processing_request: false,
 
             send_window: 0
         }
