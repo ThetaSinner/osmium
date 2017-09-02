@@ -21,7 +21,7 @@ extern crate curl;
 extern crate rustc_version;
 
 // std
-use std::thread;
+use std::{thread, time};
 use std::env;
 
 // curl
@@ -108,7 +108,18 @@ fn empty_request() {
             Ok(new_data.len())
         }).unwrap();
         debug!("Making a request to the server");
-        transfer.perform().unwrap();
+
+        for _ in 1..3 {
+            match transfer.perform() {
+                Ok(()) => {
+                    break;
+                },
+                Err(e) => {
+                    error!("Oops, the request failed. [{}]", e);
+                    thread::sleep(time::Duration::from_secs(3));
+                }
+            }
+        }
     }
 
     assert_eq!(response.len(), 54);
@@ -184,7 +195,18 @@ fn serve_file() {
             Ok(new_data.len())
         }).unwrap();
         debug!("Making a request to the server");
-        transfer.perform().unwrap();
+        
+        for _ in 1..3 {
+            match transfer.perform() {
+                Ok(()) => {
+                    break;
+                },
+                Err(e) => {
+                    error!("Oops, the request failed. [{}]", e);
+                    thread::sleep(time::Duration::from_secs(3));
+                }
+            }
+        }
     }
 
     assert_eq!(response.len(), 175);
@@ -260,7 +282,18 @@ fn serve_file_not_found() {
             Ok(new_data.len())
         }).unwrap();
         debug!("Making a request to the server");
-        transfer.perform().unwrap();
+        
+        for _ in 1..3 {
+            match transfer.perform() {
+                Ok(()) => {
+                    break;
+                },
+                Err(e) => {
+                    error!("Oops, the request failed. [{}]", e);
+                    thread::sleep(time::Duration::from_secs(3));
+                }
+            }
+        }
     }
 
     assert_eq!(response.len(), 61);
