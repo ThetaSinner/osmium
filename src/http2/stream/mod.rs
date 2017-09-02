@@ -30,9 +30,9 @@ use shared::server_trait;
 
 #[derive(Debug)]
 pub struct StreamRequest {
-    headers: header::Headers,
-    payload: Option<String>,
-    trailer_headers: Option<header::Headers>
+    pub headers: header::Headers,
+    pub payload: Option<String>,
+    pub trailer_headers: Option<header::Headers>
 }
 
 impl StreamRequest {

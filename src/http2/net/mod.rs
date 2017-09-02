@@ -166,9 +166,44 @@ impl<T, R> Server<T, R>
 mod tests {
     use super::Server;
 
+    use http2::header;
+    use http2::stream as streaming;
+    use shared::server_trait;
+
+    struct MyServer;
+
+    #[derive(Debug)]
+    struct HttpRequest {
+        pub headers: header::Headers,
+        pub body: Option<String>
+    }
+
+    impl From<streaming::StreamRequest> for HttpRequest {
+        fn from(stream_request: streaming::StreamRequest) -> HttpRequest {
+            HttpRequest {
+                headers: stream_request.headers,
+                body: stream_request.payload
+            }
+        }
+    }
+
+    impl server_trait::OsmiumServer for MyServer {
+        type Request = HttpRequest;
+        type Response = ();
+
+        fn process(&self, request: Self::Request) -> Self::Response {
+            println!("Got request {:?}", request);
+        }
+    }
+
     // MANUAL TESTING #[test]
     fn test_start_server() {
         println!("start server");
-        Server::new().start_server();
+        Server::new(MyServer {}).start_server();
+    }
+
+    // MANUAL TESTING #[test]
+    fn test_receive_request_in_application() {
+        Server::new(MyServer {}).start_server();
     }
 }
