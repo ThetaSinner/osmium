@@ -19,12 +19,14 @@ mod connection_frame_state;
 
 // std
 use std::collections::{VecDeque, HashMap};
+use std::convert;
 
 // osmium
 use http2::frame as framing;
 use http2::error;
 use http2::stream as streaming;
 use http2::hpack::context as hpack_context;
+use shared::server_trait;
 
 pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
@@ -45,7 +47,9 @@ impl<'a> Connection<'a> {
         }
     }
 
-    pub fn push_frame(&mut self, frame: framing::Frame) {
+    pub fn push_frame<T, R>(&mut self, frame: framing::Frame, app: &T)
+        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<streaming::StreamRequest>
+    {
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),
@@ -123,15 +127,19 @@ impl<'a> Connection<'a> {
                     .entry(frame.header.stream_id)
                     .or_insert(streaming::Stream::new());
 
-                let stream_response = stream.recv(framing::StreamFrame {
-                    // TODO constructor for converting the header.
-                    header: framing::StreamFrameHeader {
-                        length: frame.header.length,
-                        frame_type: frame_type,
-                        flags: frame.header.flags
-                    },
-                    payload: frame.payload
-                }, &mut self.hpack_context);
+                let stream_response = stream.recv(
+                    framing::StreamFrame {
+                        // TODO constructor for converting the header.
+                        header: framing::StreamFrameHeader {
+                            length: frame.header.length,
+                            frame_type: frame_type,
+                            flags: frame.header.flags
+                        },
+                        payload: frame.payload
+                    }, 
+                    &mut self.hpack_context,
+                    app
+                );
 
                 // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
                 if let Some(err) = stream_response {

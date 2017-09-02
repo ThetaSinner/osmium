@@ -19,5 +19,5 @@ pub trait OsmiumServer {
     type Request;
     type Response;
 
-    fn process(request: Self::Request) -> Self::Response;
+    fn process(&self, request: Self::Request) -> Self::Response;
 }

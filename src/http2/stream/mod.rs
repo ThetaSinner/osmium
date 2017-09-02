@@ -17,10 +17,16 @@
 
 pub mod state;
 
+// std
+use std::convert;
+use std::mem;
+
+// osmium
 use http2::frame as framing;
 use http2::error;
 use http2::header;
 use http2::hpack::{context as hpack_context, unpack as hpack_unpack};
+use shared::server_trait;
 
 #[derive(Debug)]
 pub struct StreamRequest {
@@ -30,6 +36,14 @@ pub struct StreamRequest {
 }
 
 impl StreamRequest {
+    pub fn new() -> Self {
+        StreamRequest {
+            headers: header::Headers::new(),
+            payload: None,
+            trailer_headers: None
+        }
+    }
+
     // TODO will return an error.
     pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_context: &mut hpack_context::Context) {
         let decoded = hpack_unpack::unpack(temp_header_block, hpack_context);
@@ -82,7 +96,14 @@ impl Stream {
     }
 
     // Note that unpacking headers is stateful, and we can only borrow the connection's context mutably once.
-    pub fn recv(&mut self, frame: framing::StreamFrame, hpack_context: &mut hpack_context::Context) -> Option<error::HttpError> {
+    pub fn recv<T, R>(
+        &mut self, 
+        frame: framing::StreamFrame, 
+        hpack_context: &mut hpack_context::Context,
+        app: &T
+    ) -> Option<error::HttpError> 
+        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<StreamRequest>
+    {
         // TODO used a named tuple for this so that the errors are better and 
         // it is clearer where the yields are in the block below.
         let (opt_new_state, opt_err) = match self.state_name {
@@ -114,7 +135,7 @@ impl Stream {
                             }
                             else {
                                 unreachable!("enum decomposition failed. How?");
-                            }
+                            };
                         }
 
                         (Some(new_state), None)
@@ -432,6 +453,10 @@ impl Stream {
             self.state_name = new_state;
         }
 
+        // TODO should not try to process if an error occurred?
+        // Process the request if it is fully received.
+        self.try_start_process(app);
+
         opt_err
     }
 
@@ -443,5 +468,32 @@ impl Stream {
         // If the request headers have already been received, but another headers frame is
         // being processed then is must end the stream.
         !self.request.headers.is_empty()
+    }
+
+    fn try_start_process<T, R>(&mut self, app: &T) 
+        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<StreamRequest>
+    {
+        match self.state_name {
+            state::StreamStateName::HalfClosedRemote(_) => {
+                if !self.temp_header_block.is_empty() {
+                    // There is a header block being received so the request must not be processed
+                    // yet.
+                    return;
+                }
+
+                // As soon as we've started processing, this flag needs to have been set to true.
+                // This allows the server to tell the client which streams have started to be processed
+                // in the event of an error.
+                self.started_processing_request = true;
+
+                let mut new_request = StreamRequest::new();
+                mem::swap(&mut self.request, &mut new_request);
+
+                app.process(new_request.into());
+            },
+            _ => {
+                // Request not fully received, do nothing.
+            }
+        }
     }
 }

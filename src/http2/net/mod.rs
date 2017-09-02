@@ -18,6 +18,7 @@
 // std
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::marker;
 
 // tokio
 use futures::{Stream, Sink, Future, stream};
@@ -29,20 +30,30 @@ use tokio_io::AsyncRead;
 
 // threadpool
 use threadpool::ThreadPool;
+use std::convert;
 
 // osmium
 use http2::frame as framing;
 use http2::core;
 use http2::hpack;
+use shared::server_trait;
+use http2::stream as streaming;
 
-struct Server {
+struct Server<T, R>
+    where T: server_trait::OsmiumServer<Request=R>, R: convert::From<streaming::StreamRequest>
+{
     hpack: hpack::HPack,
+    app: T
 }
 
-impl Server {
-    pub fn new() -> Self {
+impl<T, R> Server<T, R> 
+    where T: 'static + server_trait::OsmiumServer<Request=R> + marker::Sync + marker::Send,
+          R: 'static + convert::From<streaming::StreamRequest>
+{
+    pub fn new(app: T) -> Self {
         Server {
-            hpack: hpack::HPack::new()
+            hpack: hpack::HPack::new(),
+            app: app
         }
     }
 
@@ -79,7 +90,8 @@ impl Server {
                         framing::Frame {
                             header: msg.0,
                             payload: msg.1
-                        }
+                        },
+                        &server_instance.app
                     );
                     
                     while let Some(response_frame) = connection.pull_frame() {
