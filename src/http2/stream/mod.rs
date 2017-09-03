@@ -554,6 +554,22 @@ impl Stream {
                 },
                 state::StreamStateName::Open(ref state) => {
                     match frame.get_frame_type() {
+                        framing::FrameType::Data => {
+                            let new_state = if framing::data::is_end_stream(frame.get_flags()) {
+                                Some(
+                                    state::StreamStateName::HalfClosedLocal(state.into())
+                                )
+                            }
+                            else {
+                                None
+                            };
+
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+                            
+                            new_state
+                        },
                         framing::FrameType::Headers => {
                             let new_state = if framing::headers::is_end_stream(frame.get_flags()) {
                                 Some(
@@ -570,12 +586,128 @@ impl Stream {
                             
                             new_state
                         },
+                        framing::FrameType::ResetStream => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            Some(state::StreamStateName::Closed(state.into()))
+                        },
+                        framing::FrameType::PushPromise => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            None
+                        },
+                        framing::FrameType::WindowUpdate => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            None
+                        },
+                        framing::FrameType::Continuation => {
+                            // The continuation frames are appended to form a block of frames. The header and continuation
+                            // frames must be sent with no frames from this or other streams interleaved. The simplest way
+                            // to achieve this is to clump them together. There seems to be no advantage to leaving them
+                            // as seperate frames and trying to coordinate this later.
+                            if let Some(ref mut last_frame) = send_payload.last_mut() {
+                                last_frame.extend(
+                                    framing::compress_frame(frame, self.id)
+                                );
+                            }
+                            else {
+                                panic!("continuation with no preceeding frame to send");
+                            }
+
+                            None
+                        },
                         _ => {
+                            // TODO the frames which should be handled have been, this should be an internal error.
+                            panic!("unhandled frame for send");
+                        }
+                    }
+                },
+                state::StreamStateName::HalfClosedRemote(ref state) => {
+                    match frame.get_frame_type() {
+                        framing::FrameType::Data => {
+                            let new_state = if framing::data::is_end_stream(frame.get_flags()) {
+                                Some(
+                                    state::StreamStateName::Closed(state.into())
+                                )
+                            }
+                            else {
+                                None
+                            };
+
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+                            
+                            new_state
+                        },
+                        framing::FrameType::Headers => {
+                            let new_state = if framing::headers::is_end_stream(frame.get_flags()) {
+                                Some(
+                                    state::StreamStateName::Closed(state.into())
+                                )
+                            }
+                            else {
+                                None
+                            };
+
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+                            
+                            new_state
+                        },
+                        framing::FrameType::ResetStream => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            Some(state::StreamStateName::Closed(state.into()))
+                        },
+                        framing::FrameType::PushPromise => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            None
+                        },
+                        framing::FrameType::WindowUpdate => {
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+
+                            None
+                        },
+                        framing::FrameType::Continuation => {
+                            // The continuation frames are appended to form a block of frames. The header and continuation
+                            // frames must be sent with no frames from this or other streams interleaved. The simplest way
+                            // to achieve this is to clump them together. There seems to be no advantage to leaving them
+                            // as seperate frames and trying to coordinate this later.
+                            if let Some(ref mut last_frame) = send_payload.last_mut() {
+                                last_frame.extend(
+                                    framing::compress_frame(frame, self.id)
+                                );
+                            }
+                            else {
+                                panic!("continuation with no preceeding frame to send");
+                            }
+
+                            None
+                        },
+                        _ => {
+                            // TODO the frames which should be handled have been, this should be an internal error.
                             panic!("unhandled frame for send");
                         }
                     }
                 },
                 _ => {
+                    // TODO there's more to handle here.
                     panic!("unhandled state for send");
                 }
             };

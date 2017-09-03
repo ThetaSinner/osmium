@@ -139,3 +139,7 @@ impl DataFrame {
         self.end_stream
     }
 }
+
+pub fn is_end_stream(flags: u8) -> bool {
+    flags & FLAG_END_STREAM == FLAG_END_STREAM
+}
