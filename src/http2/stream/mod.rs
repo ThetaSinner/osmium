@@ -152,6 +152,8 @@ pub struct Stream {
     request: StreamRequest,
     started_processing_request: bool,
 
+    send_frames: Vec<Vec<u8>>,
+
     send_window: u32
 }
 
@@ -170,6 +172,8 @@ impl Stream {
                 trailer_headers: None
             },
             started_processing_request: false,
+
+            send_frames: Vec::new(),
 
             send_window: 0
         }
@@ -543,7 +547,7 @@ impl Stream {
     }
 
     pub fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
-        let mut send_payload = Vec::new();
+        let mut temp_send_frames = Vec::new();
 
         let mut frame_iter = frames.into_iter();
         while let Some(frame) = frame_iter.next() {
@@ -564,7 +568,7 @@ impl Stream {
                                 None
                             };
 
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
                             
@@ -580,28 +584,28 @@ impl Stream {
                                 None
                             };
 
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
                             
                             new_state
                         },
                         framing::FrameType::ResetStream => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
                             Some(state::StreamStateName::Closed(state.into()))
                         },
                         framing::FrameType::PushPromise => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
                             None
                         },
                         framing::FrameType::WindowUpdate => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
@@ -612,7 +616,7 @@ impl Stream {
                             // frames must be sent with no frames from this or other streams interleaved. The simplest way
                             // to achieve this is to clump them together. There seems to be no advantage to leaving them
                             // as seperate frames and trying to coordinate this later.
-                            if let Some(ref mut last_frame) = send_payload.last_mut() {
+                            if let Some(ref mut last_frame) = temp_send_frames.last_mut() {
                                 last_frame.extend(
                                     framing::compress_frame(frame, self.id)
                                 );
@@ -641,7 +645,7 @@ impl Stream {
                                 None
                             };
 
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
                             
@@ -657,28 +661,28 @@ impl Stream {
                                 None
                             };
 
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
                             
                             new_state
                         },
                         framing::FrameType::ResetStream => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
                             Some(state::StreamStateName::Closed(state.into()))
                         },
                         framing::FrameType::PushPromise => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
                             None
                         },
                         framing::FrameType::WindowUpdate => {
-                            send_payload.push(
+                            temp_send_frames.push(
                                 framing::compress_frame(frame, self.id)
                             );
 
@@ -689,7 +693,7 @@ impl Stream {
                             // frames must be sent with no frames from this or other streams interleaved. The simplest way
                             // to achieve this is to clump them together. There seems to be no advantage to leaving them
                             // as seperate frames and trying to coordinate this later.
-                            if let Some(ref mut last_frame) = send_payload.last_mut() {
+                            if let Some(ref mut last_frame) = temp_send_frames.last_mut() {
                                 last_frame.extend(
                                     framing::compress_frame(frame, self.id)
                                 );
@@ -716,6 +720,8 @@ impl Stream {
                 self.state_name = new_state;
             }
         }
+
+        self.send_frames.extend(temp_send_frames);
     }
 
     fn should_headers_frame_end_stream(&self) -> bool {
