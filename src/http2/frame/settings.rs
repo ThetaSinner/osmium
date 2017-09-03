@@ -68,7 +68,7 @@ impl CompressibleHttpFrame for SettingsFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
         for setting in self.parameters.into_iter() {

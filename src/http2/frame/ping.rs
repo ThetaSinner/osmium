@@ -64,7 +64,7 @@ impl CompressibleHttpFrame for PingFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         self.payload.to_vec()
     }
 }

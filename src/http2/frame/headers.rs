@@ -72,6 +72,14 @@ impl HeadersFrameCompressModel {
         self.flags |= FLAG_PRIORITY;
     }
 
+    pub fn set_end_headers(&mut self) {
+        self.flags |= FLAG_END_HEADERS;
+    }
+
+    pub fn set_end_stream(&mut self) {
+        self.flags |= FLAG_END_STREAM;
+    }
+
     pub fn set_header_block_fragment(&mut self, header_block_fragment: Vec<u8>) {
         self.header_block_fragment = header_block_fragment;
     }
@@ -102,12 +110,13 @@ impl CompressibleHttpFrame for HeadersFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
+        let pad_length = self.pad_length;
         // include the pad length if set
         if self.flags & FLAG_PADDED == FLAG_PADDED {
-            result.push(self.pad_length)
+            result.push(pad_length)
         }
 
         // include the stream dependency
@@ -133,7 +142,7 @@ impl CompressibleHttpFrame for HeadersFrameCompressModel {
         result.extend(self.header_block_fragment);
 
         // TODO there has to be a better way to express this.
-        for _ in 0..self.pad_length {
+        for _ in 0..pad_length {
             result.push(0);
         }
 
@@ -227,4 +236,8 @@ impl HeaderFrame {
 
 pub fn is_end_headers(flags: u8) -> bool {
     flags & FLAG_END_HEADERS == FLAG_END_HEADERS
+}
+
+pub fn is_end_stream(flags: u8) -> bool {
+    flags & FLAG_END_STREAM == FLAG_END_STREAM
 }

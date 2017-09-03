@@ -55,7 +55,7 @@ impl CompressibleHttpFrame for ContinuationFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         self.header_block_fragment
     }
 }

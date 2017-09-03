@@ -25,11 +25,19 @@ use std::mem;
 use http2::frame as framing;
 use http2::error;
 use http2::header;
-use http2::hpack::{context as hpack_context, unpack as hpack_unpack};
+use http2::hpack::{context as hpack_context, unpack as hpack_unpack, pack as hpack_pack};
 use shared::server_trait;
 
 #[derive(Debug)]
 pub struct StreamRequest {
+    pub headers: header::Headers,
+    pub payload: Option<String>,
+    pub trailer_headers: Option<header::Headers>
+}
+
+#[derive(Debug)]
+pub struct StreamResponse {
+    pub informational_headers: Vec<header::Headers>,
     pub headers: header::Headers,
     pub payload: Option<String>,
     pub trailer_headers: Option<header::Headers>
@@ -66,7 +74,77 @@ impl StreamRequest {
     }
 }
 
+impl StreamResponse {
+    pub fn to_frames(self, hpack_context: &mut hpack_context::Context) -> Vec<Box<framing::CompressibleHttpFrame>>
+    {
+        let mut frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
+
+        for informational_header in &self.informational_headers {
+            frames.extend(
+                StreamResponse::headers_to_frames(informational_header, hpack_context, false)
+            );
+        }
+
+        let mut headers = StreamResponse::headers_to_frames(&self.headers, hpack_context, self.payload.is_none() && self.trailer_headers.is_none());
+        frames.extend(headers);
+
+        if self.payload.is_some() {
+            let mut data_frame = framing::data::DataFrameCompressModel::new(false);
+            data_frame.set_payload(self.payload.unwrap().into_bytes());
+            if self.trailer_headers.is_none() {
+                data_frame.set_end_stream();
+            }
+            frames.push(Box::new(data_frame));
+        }
+
+        if self.trailer_headers.is_some() {
+            let mut trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_context, true);
+            frames.extend(trailer_headers_frame);
+        }
+
+        frames
+    }
+
+    fn headers_to_frames(headers: &header::Headers, hpack_context: &mut hpack_context::Context, end_stream: bool) -> Vec<Box<framing::CompressibleHttpFrame>>
+    {
+        let mut temp_frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
+
+        let packed = hpack_pack::pack(&headers, hpack_context, true);
+        let num_chunks = ((packed.len() as f32) / 150f32).ceil() as i32;
+        let mut chunk_count = 1;
+        let mut chunks = packed.chunks(150);
+
+        if let Some(first_chunk) = chunks.next() {
+            let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
+            if end_stream {
+                headers_frame.set_end_stream();
+            }
+            headers_frame.set_header_block_fragment(first_chunk.to_vec());
+            temp_frames.push(Box::new(headers_frame));
+        }
+        else {
+            panic!("empty headers block");
+        }
+        
+        while let Some(chunk) = chunks.next() {
+            let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
+            headers_frame.set_header_block_fragment(chunk.to_vec());
+
+            chunk_count += 1;
+            if chunk_count == num_chunks {
+                headers_frame.set_end_headers();
+            }
+
+            temp_frames.push(Box::new(headers_frame));
+        }
+
+        temp_frames
+    }
+}
+
 pub struct Stream {
+    id: u32,
+
     state_name: state::StreamStateName,
 
     temp_header_block: Vec<u8>,
@@ -78,8 +156,10 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new() -> Self {
+    pub fn new(id: u32) -> Self {
         Stream {
+            id: id, 
+
             state_name: state::StreamStateName::Idle(state::StreamState::<state::StateIdle>::new()),
 
             temp_header_block: Vec::new(),
@@ -96,13 +176,15 @@ impl Stream {
     }
 
     // Note that unpacking headers is stateful, and we can only borrow the connection's context mutably once.
-    pub fn recv<T, R>(
+    pub fn recv<T, R, S>(
         &mut self, 
         frame: framing::StreamFrame, 
         hpack_context: &mut hpack_context::Context,
         app: &T
     ) -> Option<error::HttpError> 
-        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<StreamRequest>
+        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+              R: convert::From<StreamRequest>,
+              S: convert::Into<StreamResponse>
     {
         // TODO used a named tuple for this so that the errors are better and 
         // it is clearer where the yields are in the block below.
@@ -460,8 +542,48 @@ impl Stream {
         opt_err
     }
 
-    pub fn send(&mut self) {
+    pub fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
+        let mut send_payload = Vec::new();
 
+        let mut frame_iter = frames.into_iter();
+        while let Some(frame) = frame_iter.next() {
+            let new_state = match self.state_name {
+                state::StreamStateName::ReservedLocal(ref state) => {
+                    // This is a state the server will handle, but it's not implemented yet.
+                    unimplemented!();
+                },
+                state::StreamStateName::Open(ref state) => {
+                    match frame.get_frame_type() {
+                        framing::FrameType::Headers => {
+                            let new_state = if framing::headers::is_end_stream(frame.get_flags()) {
+                                Some(
+                                    state::StreamStateName::HalfClosedLocal(state.into())
+                                )
+                            }
+                            else {
+                                None
+                            };
+
+                            send_payload.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+                            
+                            new_state
+                        },
+                        _ => {
+                            panic!("unhandled frame for send");
+                        }
+                    }
+                },
+                _ => {
+                    panic!("unhandled state for send");
+                }
+            };
+
+            if let Some(new_state) = new_state {
+                self.state_name = new_state;
+            }
+        }
     }
 
     fn should_headers_frame_end_stream(&self) -> bool {
@@ -470,8 +592,10 @@ impl Stream {
         !self.request.headers.is_empty()
     }
 
-    fn try_start_process<T, R>(&mut self, app: &T) 
-        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<StreamRequest>
+    fn try_start_process<T, R, S>(&mut self, app: &T) 
+        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+              R: convert::From<StreamRequest>,
+              S: convert::Into<StreamResponse>
     {
         match self.state_name {
             state::StreamStateName::HalfClosedRemote(_) => {
@@ -489,7 +613,10 @@ impl Stream {
                 let mut new_request = StreamRequest::new();
                 mem::swap(&mut self.request, &mut new_request);
 
-                app.process(new_request.into());
+                // TODO should the application be allowed to error?
+                let response: StreamResponse = app.process(new_request.into()).into();
+
+                // self.send(response);
             },
             _ => {
                 // Request not fully received, do nothing.

@@ -39,16 +39,19 @@ use http2::hpack;
 use shared::server_trait;
 use http2::stream as streaming;
 
-struct Server<T, R>
-    where T: server_trait::OsmiumServer<Request=R>, R: convert::From<streaming::StreamRequest>
+struct Server<T, R, S>
+    where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+          R: convert::From<streaming::StreamRequest>,
+          S: convert::Into<streaming::StreamResponse>
 {
     hpack: hpack::HPack,
     app: T
 }
 
-impl<T, R> Server<T, R> 
-    where T: 'static + server_trait::OsmiumServer<Request=R> + marker::Sync + marker::Send,
-          R: 'static + convert::From<streaming::StreamRequest>
+impl<T, R, S> Server<T, R, S> 
+    where T: 'static + server_trait::OsmiumServer<Request=R, Response=S> + marker::Sync + marker::Send,
+          R: 'static + convert::From<streaming::StreamRequest>,
+          S: 'static + convert::Into<streaming::StreamResponse>
 {
     pub fn new(app: T) -> Self {
         Server {

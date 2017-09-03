@@ -64,7 +64,7 @@ impl CompressibleHttpFrame for GoAwayFrameCompressModel {
         0
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
         // include the last stream identifier

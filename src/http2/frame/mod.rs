@@ -41,7 +41,7 @@ pub trait CompressibleHttpFrame {
 
     fn get_flags(&self) -> u8;
 
-    fn get_payload(self) -> Vec<u8>;
+    fn get_payload(self: Box<Self>) -> Vec<u8>;
 }
 
 #[derive(Debug)]
@@ -120,8 +120,7 @@ pub fn to_frame_type(frame_type: u8) -> Option<FrameType> {
 
 pub type StreamId = u32;
 
-pub fn compress_frame<T>(frame: T, stream_id: StreamId) -> Vec<u8>
-    where T : CompressibleHttpFrame
+pub fn compress_frame(frame: Box<CompressibleHttpFrame>, stream_id: StreamId) -> Vec<u8>
 {
     let mut result = Vec::new();
 

@@ -21,7 +21,9 @@ pub enum HttpError {
     StreamError(ErrorCode, ErrorName)
 }
 
-#[derive(Debug)]
+// TODO copy required on cast to avoid move out in go_away. Why?
+
+#[derive(Debug, Clone, Copy)]
 pub enum ErrorCode {
     // The associated condition is not a result of an error. For example, a GOAWAY might include this code to indicate graceful shutdown of a connection.
     NoError,

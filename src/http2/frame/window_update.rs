@@ -51,7 +51,7 @@ impl CompressibleHttpFrame for WindowUpdateFrameCompressModel {
         0
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
         // include the window size increment

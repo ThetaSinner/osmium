@@ -47,8 +47,10 @@ impl<'a> Connection<'a> {
         }
     }
 
-    pub fn push_frame<T, R>(&mut self, frame: framing::Frame, app: &T)
-        where T: server_trait::OsmiumServer<Request=R>, R: convert::From<streaming::StreamRequest>
+    pub fn push_frame<T, R, S>(&mut self, frame: framing::Frame, app: &T)
+        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+              R: convert::From<streaming::StreamRequest>,
+              S: convert::Into<streaming::StreamResponse>
     {
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
@@ -103,7 +105,7 @@ impl<'a> Connection<'a> {
                             ping_response.set_ping_payload(ping_frame.get_payload());
 
                             // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
-                            self.push_send_frame(ping_response, 0x0);
+                            self.push_send_frame(Box::new(ping_response), 0x0);
                         }
                     },
                     Err(e) => {
@@ -125,7 +127,7 @@ impl<'a> Connection<'a> {
 
                 let stream = self.streams
                     .entry(frame.header.stream_id)
-                    .or_insert(streaming::Stream::new());
+                    .or_insert(streaming::Stream::new(frame.header.stream_id));
 
                 let stream_response = stream.recv(
                     framing::StreamFrame {
@@ -153,7 +155,7 @@ impl<'a> Connection<'a> {
     }
 
     // Queues a frame to be sent.
-    fn push_send_frame<T>(&mut self, frame: T, stream_id: framing::StreamId) where T : framing::CompressibleHttpFrame {
+    fn push_send_frame(&mut self, frame: Box<framing::CompressibleHttpFrame>, stream_id: framing::StreamId) {
         self.send_frames.push_back(
             framing::compress_frame(frame, stream_id)
         );
@@ -165,7 +167,7 @@ impl<'a> Connection<'a> {
         let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
 
         // (6.8) A GOAWAY frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR.
-        self.push_send_frame(go_away, 0x0);
+        self.push_send_frame(Box::new(go_away), 0x0);
     }
 
     pub fn pull_frame(&mut self) -> Option<Vec<u8>> {

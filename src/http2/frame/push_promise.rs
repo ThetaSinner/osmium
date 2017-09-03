@@ -86,12 +86,13 @@ impl CompressibleHttpFrame for PushPromiseFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
+        let pad_length = self.pad_length;
         // include the pad length if set
         if self.flags & FLAG_PADDED == FLAG_PADDED {
-            result.push(self.pad_length)
+            result.push(pad_length)
         }
 
         // include the promised stream identifier
@@ -108,7 +109,7 @@ impl CompressibleHttpFrame for PushPromiseFrameCompressModel {
         result.extend(self.header_block_fragment);
 
         // TODO there has to be a better way to express this.
-        for _ in 0..self.pad_length {
+        for _ in 0..pad_length {
             result.push(0);
         }
 

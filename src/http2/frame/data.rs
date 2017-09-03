@@ -56,6 +56,10 @@ impl DataFrameCompressModel {
         self.flags |= FLAG_PADDED;
     }
 
+    pub fn set_end_stream(&mut self) {
+        self.flags |= FLAG_END_STREAM;
+    }
+
     pub fn set_payload(&mut self, payload: Vec<u8>) {
         self.payload = payload;
     }
@@ -81,15 +85,16 @@ impl CompressibleHttpFrame for DataFrameCompressModel {
         self.flags
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
+        let pad_length = self.pad_length;
         let mut result = Vec::new();
         if self.flags & FLAG_PADDED == FLAG_PADDED {
-            result.push(self.pad_length)
+            result.push(pad_length)
         }
         result.extend(self.payload);
 
         // TODO there has to be a better way to express this.
-        for _ in 0..self.pad_length {
+        for _ in 0..pad_length {
             result.push(0);
         }
 

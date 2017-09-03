@@ -49,7 +49,7 @@ impl CompressibleHttpFrame for ResetStreamFrameCompressModel {
         0
     }
 
-    fn get_payload(self) -> Vec<u8> {
+    fn get_payload(self: Box<Self>) -> Vec<u8> {
         let mut result = Vec::new();
 
         result.push((self.error_code >> 24) as u8);
