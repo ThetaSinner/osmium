@@ -34,6 +34,7 @@ fn get_server_port_range_start() -> i32 {
     match env::var("SERVER_PORT_RANGE_START") {
         Ok(val) => val.parse::<i32>().unwrap(),
         Err(e) => {
+            warn!("port range env var not set, falling back. {}", e);
             match rustc_version::version_meta() {
                 Ok(meta) => {
                     match meta.channel {

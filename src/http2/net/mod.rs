@@ -181,6 +181,12 @@ mod tests {
         pub body: Option<String>
     }
 
+    #[derive(Debug)]
+    struct HttpResponse {
+        pub headers: header::Headers,
+        pub body: Option<String>
+    }
+
     impl From<streaming::StreamRequest> for HttpRequest {
         fn from(stream_request: streaming::StreamRequest) -> HttpRequest {
             HttpRequest {
@@ -190,12 +196,27 @@ mod tests {
         }
     }
 
+    impl From<HttpResponse> for streaming::StreamResponse {
+        fn from(http_response: HttpResponse) -> streaming::StreamResponse {
+            streaming::StreamResponse {
+                informational_headers: Vec::new(),
+                headers: http_response.headers,
+                payload: http_response.body,
+                trailer_headers: None
+            }
+        }
+    }
+
     impl server_trait::OsmiumServer for MyServer {
         type Request = HttpRequest;
-        type Response = ();
+        type Response = HttpResponse;
 
         fn process(&self, request: Self::Request) -> Self::Response {
             println!("Got request {:?}", request);
+            HttpResponse {
+                headers: header::Headers::new(),
+                body: None
+            }
         }
     }
 

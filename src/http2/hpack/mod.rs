@@ -505,8 +505,6 @@ mod tests {
         }
     }
 
-    use pretty_env_logger;
-
     // See C.3 process multiple requests on the same context
     #[test]
     pub fn decode_multiple_requests_without_huffman_coding() {

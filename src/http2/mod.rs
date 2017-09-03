@@ -21,7 +21,6 @@
 pub mod hpack;
 
 pub mod header;
-pub mod temp_use_hpack;
 pub mod frame;
 pub mod stream;
 pub mod error;
