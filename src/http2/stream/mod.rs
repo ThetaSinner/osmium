@@ -85,7 +85,7 @@ impl StreamResponse {
             );
         }
 
-        let mut headers = StreamResponse::headers_to_frames(&self.headers, hpack_context, self.payload.is_none() && self.trailer_headers.is_none());
+        let headers = StreamResponse::headers_to_frames(&self.headers, hpack_context, self.payload.is_none() && self.trailer_headers.is_none());
         frames.extend(headers);
 
         if self.payload.is_some() {
@@ -98,7 +98,7 @@ impl StreamResponse {
         }
 
         if self.trailer_headers.is_some() {
-            let mut trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_context, true);
+            let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_context, true);
             frames.extend(trailer_headers_frame);
         }
 
@@ -179,7 +179,8 @@ impl Stream {
     pub fn recv<T, R, S>(
         &mut self, 
         frame: framing::StreamFrame, 
-        hpack_context: &mut hpack_context::Context,
+        hpack_recv_context: &mut hpack_context::Context,
+        hpack_send_context: &mut hpack_context::Context,
         app: &T
     ) -> Option<error::HttpError> 
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
@@ -202,7 +203,7 @@ impl Stream {
 
                         // If the headers block is complete then unpack it immediately.
                         if headers_frame.is_end_headers() {
-                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
 
                             // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                             self.temp_header_block.clear();
@@ -282,7 +283,7 @@ impl Stream {
                         let should_end_stream = self.should_headers_frame_end_stream();
 
                         if headers_frame.is_end_headers() {
-                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
 
                             // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                             self.temp_header_block.clear();
@@ -378,7 +379,7 @@ impl Stream {
                             self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
 
                             if continuation_frame.is_end_headers() {
-                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
                                 
                                 // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                                 self.temp_header_block.clear();
@@ -435,7 +436,7 @@ impl Stream {
                             self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
 
                             if continuation_frame.is_end_headers() {
-                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_context);
+                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
                                 
                                 // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                                 self.temp_header_block.clear();
@@ -488,7 +489,7 @@ impl Stream {
                     }
                 }
             },
-            state::StreamStateName::Closed(ref state) => {
+            state::StreamStateName::Closed(_) => {
                 match frame.header.frame_type {
                     framing::FrameType::Priority => {
                         // TODO log and discard instead panic.
@@ -525,7 +526,6 @@ impl Stream {
                 // example. So this needs to go down as a case to be handled later.
 
                 panic!("state not handled yet");
-                (None, None)
             }
         };
 
@@ -537,7 +537,7 @@ impl Stream {
 
         // TODO should not try to process if an error occurred?
         // Process the request if it is fully received.
-        self.try_start_process(app);
+        self.try_start_process(app, hpack_send_context);
 
         opt_err
     }
@@ -548,7 +548,7 @@ impl Stream {
         let mut frame_iter = frames.into_iter();
         while let Some(frame) = frame_iter.next() {
             let new_state = match self.state_name {
-                state::StreamStateName::ReservedLocal(ref state) => {
+                state::StreamStateName::ReservedLocal(_) => {
                     // This is a state the server will handle, but it's not implemented yet.
                     unimplemented!();
                 },
@@ -592,7 +592,7 @@ impl Stream {
         !self.request.headers.is_empty()
     }
 
-    fn try_start_process<T, R, S>(&mut self, app: &T) 
+    fn try_start_process<T, R, S>(&mut self, app: &T, hpack_send_context: &mut hpack_context::Context) 
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
@@ -616,7 +616,7 @@ impl Stream {
                 // TODO should the application be allowed to error?
                 let response: StreamResponse = app.process(new_request.into()).into();
 
-                // self.send(response);
+                self.send(response.to_frames(hpack_send_context));
             },
             _ => {
                 // Request not fully received, do nothing.

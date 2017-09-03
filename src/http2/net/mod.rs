@@ -39,7 +39,7 @@ use http2::hpack;
 use shared::server_trait;
 use http2::stream as streaming;
 
-struct Server<T, R, S>
+pub struct Server<T, R, S>
     where T: server_trait::OsmiumServer<Request=R, Response=S>, 
           R: convert::From<streaming::StreamRequest>,
           S: convert::Into<streaming::StreamResponse>
@@ -85,7 +85,7 @@ impl<T, R, S> Server<T, R, S>
             let (mut ftx, frx) = futures_mpsc::channel(5);
             let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
             thread_pool.execute(move || {
-                let mut connection = core::Connection::new(server_instance.hpack.new_context());
+                let mut connection = core::Connection::new(server_instance.hpack.new_context(), server_instance.hpack.new_context());
 
                 let mut msg_iter = rx.iter();
                 while let Some(msg) = msg_iter.next() {

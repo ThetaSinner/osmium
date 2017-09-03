@@ -26,6 +26,10 @@ pub enum StreamStateName {
 }
 
 pub struct StreamState<S> {
+    // This value is never accessed, but it is required to make the generics in the state
+    // machine work.
+    // TODO is there a better way to write this code so that this value isn't required.
+    #[allow(dead_code)]
     state: S
 }
 

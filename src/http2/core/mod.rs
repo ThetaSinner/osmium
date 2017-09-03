@@ -28,21 +28,23 @@ use http2::stream as streaming;
 use http2::hpack::context as hpack_context;
 use shared::server_trait;
 
-pub struct Connection<'a> {
+pub struct Connection<'a, 'b> {
     send_frames: VecDeque<Vec<u8>>,
     frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
 
-    hpack_context: hpack_context::Context<'a>,
+    hpack_recv_context: hpack_context::Context<'a>,
+    hpack_send_context: hpack_context::Context<'b>,
 
     streams: HashMap<framing::StreamId, streaming::Stream>
 }
 
-impl<'a> Connection<'a> {
-    pub fn new(hpack_context: hpack_context::Context) -> Connection {
+impl<'a, 'b> Connection<'a, 'b> {
+    pub fn new(hpack_recv_context: hpack_context::Context<'a>, hpack_send_context: hpack_context::Context<'b>) -> Connection<'a, 'b> {
         Connection {
             send_frames: VecDeque::new(),
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
-            hpack_context: hpack_context,
+            hpack_recv_context: hpack_recv_context,
+            hpack_send_context: hpack_send_context,
             streams: HashMap::new()
         }
     }
@@ -139,7 +141,8 @@ impl<'a> Connection<'a> {
                         },
                         payload: frame.payload
                     }, 
-                    &mut self.hpack_context,
+                    &mut self.hpack_recv_context,
+                    &mut self.hpack_send_context,
                     app
                 );
 
