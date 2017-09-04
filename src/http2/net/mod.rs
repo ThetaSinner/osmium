@@ -76,6 +76,9 @@ impl<T, R, S> Server<T, R, S>
 
         let server_instance = Arc::new(Box::new(self));
 
+        // TODO the code below means that all streams run on the same thread. Probably
+        // not the way it should be.
+
         // get a stream (infinite iterator) of incoming connections
         let server = listener.incoming().zip(stream::repeat(server_instance.clone())).for_each(|((socket, _remote_addr), server_instance)| {
             debug!("Starting connection on {}", _remote_addr);

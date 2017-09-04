@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+// TODO rename this module to connection or similar.
+
 mod connection_frame_state;
 
 // std
@@ -150,6 +152,11 @@ impl<'a, 'b> Connection<'a, 'b> {
                 if let Some(err) = stream_response {
                     error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
                 }
+
+                // TODO does the stream build its error or does the error frame get built and sent here.
+
+                // Fetch any send frames which have been generated on the stream.
+                self.send_frames.extend(stream.fetch_send_frames());
             },
             _ => {
                 panic!("can't handle that frame type yet");
@@ -173,6 +180,7 @@ impl<'a, 'b> Connection<'a, 'b> {
         self.push_send_frame(Box::new(go_away), 0x0);
     }
 
+    // TODO do a fetch all like in stream?
     pub fn pull_frame(&mut self) -> Option<Vec<u8>> {
         self.send_frames.pop_front()
     }

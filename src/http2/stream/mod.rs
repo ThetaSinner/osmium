@@ -546,7 +546,7 @@ impl Stream {
         opt_err
     }
 
-    pub fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
+    fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
         let mut temp_send_frames = Vec::new();
 
         let mut frame_iter = frames.into_iter();
@@ -722,6 +722,10 @@ impl Stream {
         }
 
         self.send_frames.extend(temp_send_frames);
+    }
+
+    pub fn fetch_send_frames(&mut self) -> Vec<Vec<u8>> {
+        self.send_frames.drain(1..).collect()
     }
 
     fn should_headers_frame_end_stream(&self) -> bool {
