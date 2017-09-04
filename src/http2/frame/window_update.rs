@@ -24,6 +24,7 @@ use super::FrameType;
 
 const WINDOW_SIZE_INCREMENT_BIT_MASK: u8 = 0x80;
 
+#[derive(Debug)]
 pub struct WindowUpdateFrameCompressModel {
     window_size_increment: u32
 }

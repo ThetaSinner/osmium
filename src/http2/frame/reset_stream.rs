@@ -22,6 +22,7 @@ use std::vec::IntoIter;
 use super::CompressibleHttpFrame;
 use super::FrameType;
 
+#[derive(Debug)]
 pub struct ResetStreamFrameCompressModel {
     error_code: u32
 }

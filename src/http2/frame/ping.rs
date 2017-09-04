@@ -28,6 +28,7 @@ const FLAG_ACK: u8 = 0x1;
 // the spec says '8 octets of opaque data', which can be anything? or should it be random
 const DEFAULT_PING_PAYLOAD: [u8; 8] = [0x9, 0x2, 0xa, 0x3, 0x2, 0xe, 0x1, 0xf];
 
+#[derive(Debug)]
 pub struct PingFrameCompressModel {
     flags: u8,
     payload: [u8; 8]

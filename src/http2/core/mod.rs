@@ -157,6 +157,7 @@ impl<'a, 'b> Connection<'a, 'b> {
 
                 // Fetch any send frames which have been generated on the stream.
                 self.send_frames.extend(stream.fetch_send_frames());
+                trace!("Finished processing headers on stream [{}]. Frames ready for send [{:?}]", frame.header.stream_id, self.send_frames);
             },
             _ => {
                 panic!("can't handle that frame type yet");

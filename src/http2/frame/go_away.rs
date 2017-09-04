@@ -25,6 +25,7 @@ use super::FrameType;
 
 const LAST_STREAM_IDENTIFIER_BIT_MASK: u8 = 0x80;
 
+#[derive(Debug)]
 pub struct GoAwayFrameCompressModel {
     last_stream_identifier: u32,
     error_code: error::ErrorCode,

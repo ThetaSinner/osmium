@@ -31,10 +31,13 @@ pub const FRAME_HEADER_SIZE: usize = 9;
 // Denoted 'R' in http2 Section 4.1
 const STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = !0x80;
 
+// std
+use std::fmt;
+
 // osmium
 pub use self::data::DataFrame;
 
-pub trait CompressibleHttpFrame {
+pub trait CompressibleHttpFrame: fmt::Debug {
     fn get_length(&self) -> i32;
 
     fn get_frame_type(&self) -> FrameType;

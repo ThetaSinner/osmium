@@ -12,3 +12,7 @@ print(frame)
 my_socket = socket.socket()
 my_socket.connect(("127.0.0.1", 8080))
 my_socket.send(frame)
+
+response = my_socket.recv(1024)
+
+print(response)

@@ -27,6 +27,7 @@ const FLAG_PADDED: u8 = 0x8;
 
 const PROMISED_STREAM_IDENTIFIER_RESERVED_BIT_MASK: u8 = 0x80;
 
+#[derive(Debug)]
 pub struct PushPromiseFrameCompressModel {
     flags: u8,
     pad_length: u8,

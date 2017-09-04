@@ -77,6 +77,8 @@ impl StreamRequest {
 impl StreamResponse {
     pub fn to_frames(self, hpack_context: &mut hpack_context::Context) -> Vec<Box<framing::CompressibleHttpFrame>>
     {
+        trace!("Starting to convert stream response to frames [{:?}]", self);
+
         let mut frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
 
         for informational_header in &self.informational_headers {
@@ -101,6 +103,8 @@ impl StreamResponse {
             let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_context, true);
             frames.extend(trailer_headers_frame);
         }
+
+        trace!("Converted to frames [{:?}]", frames);
 
         frames
     }
@@ -722,10 +726,12 @@ impl Stream {
         }
 
         self.send_frames.extend(temp_send_frames);
+
+        trace!("Finished sending frames on stream [{:?}]", self.send_frames);
     }
 
     pub fn fetch_send_frames(&mut self) -> Vec<Vec<u8>> {
-        self.send_frames.drain(1..).collect()
+        self.send_frames.drain(0..).collect()
     }
 
     fn should_headers_frame_end_stream(&self) -> bool {
@@ -755,8 +761,10 @@ impl Stream {
                 let mut new_request = StreamRequest::new();
                 mem::swap(&mut self.request, &mut new_request);
 
+                trace!("Passing request to the application [{:?}]", new_request);
                 // TODO should the application be allowed to error?
                 let response: StreamResponse = app.process(new_request.into()).into();
+                trace!("Got response from the application [{:?}]", response);
 
                 self.send(response.to_frames(hpack_send_context));
             },

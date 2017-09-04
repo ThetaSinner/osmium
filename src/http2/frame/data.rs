@@ -25,6 +25,7 @@ use super::FrameType;
 const FLAG_END_STREAM: u8 = 0x1;
 const FLAG_PADDED: u8 = 0x8;
 
+#[derive(Debug)]
 pub struct DataFrameCompressModel {
     flags: u8,
     pad_length: u8,

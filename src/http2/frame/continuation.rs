@@ -24,6 +24,7 @@ use super::FrameType;
 
 const FLAG_END_HEADERS: u8 = 0x4;
 
+#[derive(Debug)]
 pub struct ContinuationFrameCompressModel {
     flags: u8,
     header_block_fragment: Vec<u8>

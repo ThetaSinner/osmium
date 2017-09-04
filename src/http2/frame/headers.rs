@@ -29,6 +29,7 @@ const FLAG_PRIORITY: u8 = 0x20;
 
 const STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK: u8 = 0x80;
 
+#[derive(Debug)]
 pub struct HeadersFrameCompressModel {
     flags: u8,
     pad_length: u8,

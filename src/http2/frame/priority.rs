@@ -24,6 +24,7 @@ use super::FrameType;
 
 const STREAM_DEPENDENCY_EXCLUSIVE_BIT_MASK: u8 = 0x80;
 
+#[derive(Debug)]
 pub struct PriorityFrameCompressModel {
     stream_dependency: u32,
     stream_dependency_exclusive: bool,

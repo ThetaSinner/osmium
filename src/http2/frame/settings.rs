@@ -25,11 +25,13 @@ use super::FrameType;
 
 const FLAG_ACK: u8 = 0x1;
 
+#[derive(Debug)]
 pub struct SettingsParameter {
     name: settings::SettingName,
     value: u32
 }
 
+#[derive(Debug)]
 pub struct SettingsFrameCompressModel {
     flags: u8,
     parameters: Vec<SettingsParameter>

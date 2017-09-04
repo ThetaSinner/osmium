@@ -216,8 +216,12 @@ mod tests {
 
         fn process(&self, request: Self::Request) -> Self::Response {
             println!("Got request {:?}", request);
+
+            let mut headers = header::Headers::new();
+            headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
+
             HttpResponse {
-                headers: header::Headers::new(),
+                headers: headers,
                 body: None
             }
         }
