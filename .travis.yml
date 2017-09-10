@@ -1,8 +1,11 @@
 language: rust
+notifications:
+  slack:
+    secure: UMhCCCgTRWCN9uE0Pxf5Nc24m71boVJa2pseEVPlS3xliLn26Hu97IiHeM3mMQllVh2BpsNZOxHd7uyBUVbMcdFswWiIuVWisUFdugRe+XM2yTvpioGpNpfpOHJgNmVnuw29KquDYmBz5CWyZ9xpUmEI4uHj1rRyKXKbQwffI7l4j5T1/Dr7N9PJ3tYgPHUiLTW3+B0uCr1AX/vnJLlMbr0YghhPqdA45OvMnIZXCGQOqBp9/j3Nc5kr9pRacYQTSdsObEXw9LybiYREIgSpkP2zgvgT+ZiGVqd0nNplhIg4+CqpTF28csY5rEEUajLH19poSpl++gLz5lrL1a3WImInMgv+0q4nO5+AZ8hslij4dohncXhn13EyOhjRdffNEgXSHO/O4FfbzttrWsy6VqDaKo3fwi54hcvOKFvCmm+8V9K2Cunh1wZ8kN7zViUCF0WOQFsoOj+eQ6/+9dlQTqc7dgNjkw2fLbm2XxGNEP7xlm8fNsXKR6ZOFCvseYXuJtd2pDQl99Ohwcg5AyqLNFDMYqrtDnQnTACdiKCRtn43uxQFGFqAFW1DyZMfH+CmeXlyNWHuGfgsqZKTRnAh2/GBX7eNmI+dqqIZDuxV2jkvQwWbkQ3i+gBXjAiO0tt1tXmThect8s3OtiRt/hC+X1g9Wi/YeWz7BX+BTvlr5+c=
 rust:
-  - stable
-  - beta
-  - nightly
+- stable
+- beta
+- nightly
 matrix:
   allow_failures:
-    - rust: nightly
+  - rust: nightly
