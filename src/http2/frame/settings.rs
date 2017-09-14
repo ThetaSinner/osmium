@@ -89,6 +89,7 @@ impl CompressibleHttpFrame for SettingsFrameCompressModel {
     }
 }
 
+#[derive(Debug)]
 pub struct SettingsFrame {
     acknowledge: bool,
     parameters: Vec<SettingsParameter>
@@ -118,7 +119,7 @@ impl SettingsFrame {
 
             for _ in 0..(frame_header.length / 6) {
                 let raw_name = 
-                    (frame.next().unwrap() as u16) << 8 +
+                    ((frame.next().unwrap() as u16) << 8) +
                     (frame.next().unwrap() as u16);
 
                 let opt_name = settings::to_setting_name(
@@ -132,9 +133,9 @@ impl SettingsFrame {
                     settings_frame.parameters.push(SettingsParameter {
                         name: opt_name.unwrap(),
                         value:
-                            (frame.next().unwrap() as u32) << 24 +
-                            (frame.next().unwrap() as u32) << 16 +
-                            (frame.next().unwrap() as u32) << 8 +
+                            ((frame.next().unwrap() as u32) << 24) +
+                            ((frame.next().unwrap() as u32) << 16) +
+                            ((frame.next().unwrap() as u32) << 8) +
                             frame.next().unwrap() as u32
                     });
                 }
@@ -151,4 +152,22 @@ impl SettingsFrame {
     pub fn get_parameters(&self) -> &[SettingsParameter] {
         self.parameters.as_slice()
     }
+}
+
+#[test]
+fn example_payload() {
+    let header = super::FrameHeader {
+        length: 18,
+        frame_type: Some(super::FrameType::Settings),
+        flags: 0,
+        stream_id: 0
+    };
+    
+    // This is the settings payload the curl sends on with an http2 upgrade request.
+    let mut payload = vec![0, 3, 0, 0, 0, 100, 0, 4, 64, 0, 0, 0, 0, 2, 0, 0, 0, 0];
+
+    let decoded = SettingsFrame::new(&header, &mut payload.into_iter());
+
+    // TODO assert.
+    println!("{:?}", decoded);
 }
