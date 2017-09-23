@@ -6,6 +6,8 @@ rust:
 - stable
 - beta
 - nightly
+install:
+- apt-get install pkg-config libssl-dev
 matrix:
   allow_failures:
   - rust: nightly
