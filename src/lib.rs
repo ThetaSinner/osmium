@@ -27,6 +27,9 @@ extern crate httparse;
 extern crate pretty_env_logger;
 extern crate threadpool;
 
+extern crate openssl;
+extern crate tokio_openssl;
+
 pub mod http_version;
 pub mod http;
 pub mod http2;

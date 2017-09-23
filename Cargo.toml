@@ -15,6 +15,10 @@ log = "0.3"
 pretty_env_logger = "0.1.1"
 threadpool = "1.6"
 
+# feature is enabled so that alpn is available.
+openssl = { version = "^0.9.17", features = ["v110"] }
+tokio-openssl = { git = "https://github.com/ThetaSinner/tokio-openssl" }
+
 # http only
 httparse = "1.2.3"
 
