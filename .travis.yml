@@ -7,16 +7,12 @@ rust:
 - beta
 - nightly
 before_install:
+  - openssl version -a
+  - sudo add-apt-repository ppa:0k53d-karl-f830m/openssl
   - sudo apt-get -qq update
   - sudo apt-get install pkg-config
-  - wget https://www.openssl.org/source/openssl-1.0.2l.tar.gz
-  - tar -xvzf openssl-1.0.2l.tar.gz > /dev/null
-  - cd openssl-1.0.2l
-  - ./config -Wl,--enable-new-dtags,-rpath,'$(LIBRPATH)'
-  - make > /dev/null
-  - sudo make install  > /dev/null
-  - cd ..
-  - openssl version
+  - sudo apt-get install openssl
+  - openssl version -a
 matrix:
   allow_failures:
   - rust: nightly
