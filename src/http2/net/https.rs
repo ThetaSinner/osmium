@@ -23,6 +23,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use std::io;
 use tokio_io;
 use tokio_openssl::{SslAcceptorExt, SslStream};
+use http2::frame as framing;
 
 const PREFACE: [u8; 24] = [0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a];
 
@@ -37,12 +38,10 @@ impl HttpsH2Handshake {
 }
 
 impl h2handshake::H2Handshake for HttpsH2Handshake {
-    fn attempt_handshake<S>(&self, stream: S) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
+    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
         where S: AsyncRead + AsyncWrite + 'static
     {
         let acceptor = openssl_helper::make_acceptor();
-
-        // TODO still need to receive settings frame after connection preface. and send our own settings.
 
         Box::new(
             acceptor.accept_async(stream)
@@ -55,23 +54,43 @@ impl h2handshake::H2Handshake for HttpsH2Handshake {
                 tokio_io::io::read_exact(stream, buf)
             })
             .and_then(|(stream, buf)| {
-                // println!("received {:?}", String::from_utf8(buf.to_vec()).unwrap());
-
                 if buf == PREFACE {
-                    tokio_io::io::write_all(stream, PREFACE.to_vec()).join(Ok(Vec::with_capacity(0)))
+                    let header_buf = [0; 9];
+                    let handshake_settings_future: Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>> = 
+                    Box::new(
+                        tokio_io::io::read_exact(stream, header_buf)
+                        .and_then(|(stream, buf)| {
+                            let frame_header = framing::decompress_frame_header(buf.to_vec());
+
+                            let mut payload_buf = Vec::with_capacity(frame_header.length as usize);
+                            payload_buf.resize(frame_header.length as usize, 0);
+                            future::ok(frame_header)
+                            .join(
+                                tokio_io::io::read_exact(stream, payload_buf)
+                            )
+                        })
+                        .and_then(move |(frame_header, (stream, buf))| {
+                            // TODO need to check frame type and stream id
+                            let settings_frame = framing::settings::SettingsFrame::new(&frame_header, &mut buf.to_vec().into_iter());
+
+                            let mut response = PREFACE.to_vec();
+                            response.extend(framing::compress_frame(settings_response, 0x0));
+                            future::ok(settings_frame)
+                            .join(
+                                tokio_io::io::write_all(stream, response)
+                            )
+                        })
+                        .map(|(settings_frame, (stream, _))| {
+                            future::ok(HandshakeCompletion { stream, settings_frame })
+                        })
+                    );
+
+                    handshake_settings_future
                 }
                 else {
-                    tokio_io::io::write_all(stream, Vec::with_capacity(0)).join(Ok(buf.to_vec()))
-                }
-            })
-            .map(|((stream, _), buf)| {
-                if buf.len() == 0 {
-                    future::ok(HandshakeCompletion {
-                        stream: stream
-                    })
-                }
-                else {
-                    future::err(HandshakeError::DidNotUpgrade(stream, buf))
+                    Box::new(
+                        future::ok(future::err(HandshakeError::DidNotUpgrade(stream, buf.to_vec())))
+                    )
                 }
             })
         )

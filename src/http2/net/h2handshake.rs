@@ -19,9 +19,10 @@ use futures::future::{self, Future};
 use tokio_io::{AsyncRead, AsyncWrite};
 use std::io;
 use tokio_openssl::SslStream;
+use http2::frame as framing;
 
 pub trait H2Handshake {
-    fn attempt_handshake<S>(&self, stream: S) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
+    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
         where S: AsyncRead + AsyncWrite + 'static;
 }
 
@@ -29,7 +30,8 @@ pub trait H2Handshake {
 pub struct HandshakeCompletion<S>
     where S: AsyncRead + AsyncWrite
 {
-    pub stream: S
+    pub stream: S,
+    pub settings_frame: framing::settings::SettingsFrame
 }
 
 #[derive(Debug)]

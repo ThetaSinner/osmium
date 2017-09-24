@@ -89,7 +89,8 @@ impl<T, R, S> Server<T, R, S>
         let server = listener.incoming().zip(stream::repeat(server_instance.clone())).for_each(|((socket, _remote_addr), server_instance)| {
             debug!("Starting connection on {}", _remote_addr);
 
-            let handshake_future = handshake.attempt_handshake(socket)
+            let settings_response = framing::settings::SettingsFrameCompressModel::new();
+            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
             })
@@ -97,11 +98,9 @@ impl<T, R, S> Server<T, R, S>
                 // Convert the future result to a standard result.
                 let handshake_result = handshake_result
                 .map_err(|handshake_error| {
-                    println!("Handshake error {:?}", handshake_error);
                     handshake_error
                 })
                 .map(|handshake_completion| {
-                    println!("Handshake completion {:?}", handshake_completion);
                     handshake_completion
                 })
                 .wait(); // safe to wait here as long as the handshake result is a future result.
