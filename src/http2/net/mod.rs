@@ -22,6 +22,7 @@ pub mod openssl_helper;
 // std
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::rc::Rc;
 use std::marker;
 
 // tokio
@@ -78,7 +79,7 @@ impl<T, R, S> Server<T, R, S>
         let addr = "127.0.0.1:8080".parse().unwrap();
         let listener = tokio_core::net::TcpListener::bind(&addr, &handle).unwrap();
 
-        let thread_pool = ThreadPool::new(10);
+        let thread_pool = Rc::new(ThreadPool::new(10));
 
         let server_instance = Arc::new(Box::new(self));
 
@@ -89,12 +90,15 @@ impl<T, R, S> Server<T, R, S>
         let server = listener.incoming().zip(stream::repeat(server_instance.clone())).for_each(|((socket, _remote_addr), server_instance)| {
             debug!("Starting connection on {}", _remote_addr);
 
+            let inner_handle = handle.clone();
+
             let settings_response = framing::settings::SettingsFrameCompressModel::new();
             let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
             })
-            .map(|handshake_result| {
+            .join(Ok(thread_pool.clone()))
+            .map(move |(handshake_result, thread_pool)| {
                 // Convert the future result to a standard result.
                 let handshake_result = handshake_result
                 .map_err(|handshake_error| {
@@ -108,86 +112,87 @@ impl<T, R, S> Server<T, R, S>
                 match handshake_result {
                     Ok(handshake_completion) => {
                         println!("handshake completed, start http/2 connection");
+                        println!("{:?}", handshake_completion.settings_frame);
+
+                        let (reader, writer) = handshake_completion.stream.split();
+
+                        let (mut ftx, frx) = futures_mpsc::channel(5);
+                        let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
+                        thread_pool.execute(move || {
+                            let mut connection = core::Connection::new(server_instance.hpack.new_context(), server_instance.hpack.new_context());
+
+                            let mut msg_iter = rx.iter();
+                            while let Some(msg) = msg_iter.next() {
+                                connection.push_frame(
+                                    framing::Frame {
+                                        header: msg.0,
+                                        payload: msg.1
+                                    },
+                                    &server_instance.app
+                                );
+                                
+                                while let Some(response_frame) = connection.pull_frame() {
+                                    ftx = ftx.send(response_frame).wait().unwrap();
+                                }
+                            }
+                        });
+
+                        let reader_loop = loop_fn((reader, tx), move |(reader, to_conn_thread)| {
+                            // this read exact will run on the event loop until enough bytes for an
+                            // http2 header frame have been read
+
+                            let read_frame_future = tokio_io::read_exact(reader, [0; framing::FRAME_HEADER_SIZE])
+                                .map_err(|err| {
+                                    // TODO this prints then swallows any errors. should handle any io errors
+                                    // handle error: connection closed results in unexpected eof error here
+                                    error!("Error reading the frame header [{:?}]", err);
+                                    ()
+                                })
+                                .and_then(|(reader, frame_header_buf)| {
+                                    let frame_header = framing::decompress_frame_header(frame_header_buf.to_vec());
+                                    
+                                    let mut buf = Vec::with_capacity(frame_header.length as usize);
+                                    buf.resize(frame_header.length as usize, 0);
+                                    tokio_io::read_exact(reader, buf)
+                                        .map_err(|err| {
+                                            // TODO handle the error
+                                            error!("Error reading the frame payload [{:?}]", err);
+                                            ()
+                                        })
+                                        .join(future::ok(frame_header))
+                                });
+
+                            read_frame_future
+                                .join(future::ok(to_conn_thread))
+                                .and_then(|(((reader, payload_buf), frame_header), to_conn_thread)| {
+                                    trace!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
+
+                                    to_conn_thread.send((frame_header, payload_buf)).unwrap();
+
+                                    Ok(Loop::Continue((reader, to_conn_thread.clone())))
+                                })
+                        });
+
+                        inner_handle.spawn(reader_loop);
+
+                        let send_loop = frx.fold(writer, |writer, msg| {
+                            println!("will push to network [{:?}]", msg);
+                            tokio_io::write_all(writer, msg)
+                                .map(|(w, _)| {
+                                    w
+                                })
+                                .map_err(|_e| {
+                                    error!("error writing to the network [{:?}]", _e);
+                                    ()
+                                })
+                        }).map(|_| ());
+
+                        inner_handle.spawn(send_loop);
                     },
                     Err(e) => {
                         panic!("handshake fail {:?}", e);
                     }
                 }
-
-                /*let (reader, writer) = socket.split();
-
-                let (mut ftx, frx) = futures_mpsc::channel(5);
-                let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
-                thread_pool.execute(move || {
-                    let mut connection = core::Connection::new(server_instance.hpack.new_context(), server_instance.hpack.new_context());
-
-                    let mut msg_iter = rx.iter();
-                    while let Some(msg) = msg_iter.next() {
-                        connection.push_frame(
-                            framing::Frame {
-                                header: msg.0,
-                                payload: msg.1
-                            },
-                            &server_instance.app
-                        );
-                        
-                        while let Some(response_frame) = connection.pull_frame() {
-                            ftx = ftx.send(response_frame).wait().unwrap();
-                        }
-                    }
-                });
-
-                let reader_loop = loop_fn((reader, tx), move |(reader, to_conn_thread)| {
-                    // this read exact will run on the event loop until enough bytes for an
-                    // http2 header frame have been read
-
-                    let read_frame_future = tokio_io::read_exact(reader, [0; framing::FRAME_HEADER_SIZE])
-                        .map_err(|err| {
-                            // TODO this prints then swallows any errors. should handle any io errors
-                            // handle error: connection closed results in unexpected eof error here
-                            error!("Error reading the frame header [{:?}]", err);
-                            ()
-                        })
-                        .and_then(|(reader, frame_header_buf)| {
-                            let frame_header = framing::decompress_frame_header(frame_header_buf.to_vec());
-                            
-                            let mut buf = Vec::with_capacity(frame_header.length as usize);
-                            buf.resize(frame_header.length as usize, 0);
-                            tokio_io::read_exact(reader, buf)
-                                .map_err(|err| {
-                                    // TODO handle the error
-                                    error!("Error reading the frame payload [{:?}]", err);
-                                    ()
-                                })
-                                .join(future::ok(frame_header))
-                        });
-
-                    read_frame_future
-                        .join(future::ok(to_conn_thread))
-                        .and_then(|(((reader, payload_buf), frame_header), to_conn_thread)| {
-                            trace!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
-
-                            to_conn_thread.send((frame_header, payload_buf)).unwrap();
-
-                            Ok(Loop::Continue((reader, to_conn_thread.clone())))
-                        })
-                });
-
-                handle.spawn(reader_loop);
-
-                let send_loop = frx.fold(writer, |writer, msg| {
-                    println!("will push to network [{:?}]", msg);
-                    tokio_io::write_all(writer, msg)
-                        .map(|(w, _)| {
-                            w
-                        })
-                        .map_err(|_e| {
-                            error!("error writing to the network [{:?}]", _e);
-                            ()
-                        })
-                }).map(|_| ());
-
-                handle.spawn(send_loop);*/
             });
 
             handle.spawn(handshake_future);
@@ -262,7 +267,7 @@ mod tests {
         }
     }
 
-    // MANUAL TESTING #[test]
+    #[test]
     fn test_start_server() {
         println!("start server");
         let handshake = https::HttpsH2Handshake::new();

@@ -160,7 +160,7 @@ impl<'a, 'b> Connection<'a, 'b> {
                 trace!("Finished processing headers on stream [{}]. Frames ready for send [{:?}]", frame.header.stream_id, self.send_frames);
             },
             _ => {
-                panic!("can't handle that frame type yet");
+                panic!("can't handle that frame type yet {:?}", frame_type);
             }
         }
     }
