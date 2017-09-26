@@ -352,12 +352,27 @@ impl Stream {
                         
                         // Given the above we just assume that this window update is for this stream,
                         // otherwise the frame wouldn't have been send to this stream.
-                        let window_update_frame = framing::window_update::WindowUpdateFrame::new(&frame.header, &mut frame.payload.into_iter());
+                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
 
-                        self.send_window += window_update_frame.get_window_size_increment();
+                        // TODO handle window frame decode error.
 
-                        // TODO there is an error to be handled here if the frame decode fails.
-                        (None, None)
+                        if window_update_frame.get_window_size_increment() == 0 {
+                            // (6.9) A receiver MUST treat the receipt of a WINDOW_UPDATE frame with an flow-control 
+                            // window increment of 0 as a stream error (Section 5.4.2) of type PROTOCOL_ERROR
+                            (
+                                None,
+                                Some(
+                                    error::HttpError::StreamError(
+                                        error::ErrorCode::ProtocolError,
+                                        error::ErrorName::ZeroWindowSizeIncrement
+                                    )
+                                )
+                            )
+                        }
+                        else {
+                            self.send_window += window_update_frame.get_window_size_increment();
+                            (None, None)
+                        }
                     },
                     framing::FrameType::Continuation => {
                         // TODO the server doesn't expect an arbitrary number of informational header blocks,
@@ -455,7 +470,7 @@ impl Stream {
                         }
                     },
                     framing::FrameType::WindowUpdate => {
-                        let window_update_frame = framing::window_update::WindowUpdateFrame::new(&frame.header, &mut frame.payload.into_iter());
+                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
 
                         self.send_window += window_update_frame.get_window_size_increment();
 

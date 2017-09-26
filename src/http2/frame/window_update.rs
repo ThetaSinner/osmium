@@ -74,7 +74,7 @@ pub struct WindowUpdateFrame {
 
 impl WindowUpdateFrame {
     // TODO going to need to be able to decode for a stream and the connection.
-    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
+    pub fn new_conn(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
         // TODO handle error
         assert_eq!(4, frame_header.length);
 
@@ -84,9 +84,26 @@ impl WindowUpdateFrame {
 
         WindowUpdateFrame {
             window_size_increment: 
-                ((window_size_increment_first_octet & !WINDOW_SIZE_INCREMENT_BIT_MASK) as u32) << 24 +
-                (frame.next().unwrap() as u32) << 16 +
-                (frame.next().unwrap() as u32) << 8 +
+                (((window_size_increment_first_octet & !WINDOW_SIZE_INCREMENT_BIT_MASK) as u32) << 24) +
+                ((frame.next().unwrap() as u32) << 16) +
+                ((frame.next().unwrap() as u32) << 8) +
+                (frame.next().unwrap() as u32)
+        }
+    }
+
+    pub fn new_stream(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
+        // TODO handle error
+        assert_eq!(4, frame_header.length);
+
+        let window_size_increment_first_octet = frame.next().unwrap();
+
+        assert_eq!(0, window_size_increment_first_octet & WINDOW_SIZE_INCREMENT_BIT_MASK);
+
+        WindowUpdateFrame {
+            window_size_increment: 
+                (((window_size_increment_first_octet & !WINDOW_SIZE_INCREMENT_BIT_MASK) as u32) << 24) +
+                ((frame.next().unwrap() as u32) << 16) +
+                ((frame.next().unwrap() as u32) << 8) +
                 (frame.next().unwrap() as u32)
         }
     }

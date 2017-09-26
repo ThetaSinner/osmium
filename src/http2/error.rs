@@ -107,7 +107,8 @@ pub enum ErrorName {
     TrailerHeaderBlockShouldTerminateStream,
     UnexpectedContinuationFrame,
     UnexpectedFrameOnHalfClosedStream,
-    StreamIsClosed
+    StreamIsClosed,
+    ZeroWindowSizeIncrement
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -142,6 +143,9 @@ impl From<ErrorName> for Vec<u8> {
             }
             ErrorName::StreamIsClosed => {
                 "stream is closed"
+            },
+            ErrorName::ZeroWindowSizeIncrement => {
+                "zero window size increment"
             }
         }.to_owned().as_bytes().to_vec()
     }

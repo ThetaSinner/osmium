@@ -37,7 +37,9 @@ pub struct Connection<'a, 'b> {
     hpack_recv_context: hpack_context::Context<'a>,
     hpack_send_context: hpack_context::Context<'b>,
 
-    streams: HashMap<framing::StreamId, streaming::Stream>
+    streams: HashMap<framing::StreamId, streaming::Stream>,
+
+    send_window: u32
 }
 
 impl<'a, 'b> Connection<'a, 'b> {
@@ -47,7 +49,8 @@ impl<'a, 'b> Connection<'a, 'b> {
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
             hpack_recv_context: hpack_recv_context,
             hpack_send_context: hpack_send_context,
-            streams: HashMap::new()
+            streams: HashMap::new(),
+            send_window: 0
         }
     }
 
@@ -142,7 +145,7 @@ impl<'a, 'b> Connection<'a, 'b> {
                             flags: frame.header.flags
                         },
                         payload: frame.payload
-                    }, 
+                    },
                     &mut self.hpack_recv_context,
                     &mut self.hpack_send_context,
                     app
@@ -159,10 +162,66 @@ impl<'a, 'b> Connection<'a, 'b> {
                 self.send_frames.extend(stream.fetch_send_frames());
                 trace!("Finished processing headers on stream [{}]. Frames ready for send [{:?}]", frame.header.stream_id, self.send_frames);
             },
+            framing::FrameType::WindowUpdate => {
+                // TODO would be nice if this was a named operation.
+                if frame.header.stream_id == 0x0 {
+                    let window_update_frame = framing::window_update::WindowUpdateFrame::new_conn(&frame.header, &mut frame.payload.into_iter());
+
+                    // TODO handle frame decode error.
+
+                    if window_update_frame.get_window_size_increment() == 0 {
+                        self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                            error::ErrorCode::ProtocolError,
+                            error::ErrorName::ZeroWindowSizeIncrement
+                        ));
+                    }
+                    else {
+                        self.send_window += window_update_frame.get_window_size_increment();
+                    }
+                }
+                else {
+                    self.move_to_stream(frame_type, frame, app);
+                }
+            },
             _ => {
                 panic!("can't handle that frame type yet {:?}", frame_type);
             }
         }
+    }
+
+    fn move_to_stream<T, R, S>(&mut self, frame_type: framing::FrameType, frame: framing::Frame, app: &T)
+        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+              R: convert::From<streaming::StreamRequest>,
+              S: convert::Into<streaming::StreamResponse>
+    {
+        let stream = self.streams
+            .entry(frame.header.stream_id)
+            .or_insert(streaming::Stream::new(frame.header.stream_id));
+
+        let stream_response = stream.recv(
+            framing::StreamFrame {
+                // TODO constructor for converting the header.
+                header: framing::StreamFrameHeader {
+                    length: frame.header.length,
+                    frame_type: frame_type,
+                    flags: frame.header.flags
+                },
+                payload: frame.payload
+            },
+            &mut self.hpack_recv_context,
+            &mut self.hpack_send_context,
+            app
+        );
+
+        // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
+        if let Some(err) = stream_response {
+            error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
+        }
+
+        // TODO does the stream build its error or does the error frame get built and sent here.
+
+        // Fetch any send frames which have been generated on the stream.
+        self.send_frames.extend(stream.fetch_send_frames());
     }
 
     // Queues a frame to be sent.
