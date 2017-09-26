@@ -43,6 +43,7 @@ use http2::core;
 use http2::hpack;
 use shared::server_trait;
 use http2::stream as streaming;
+use http2::settings;
 
 pub struct Server<T, R, S>
     where T: server_trait::OsmiumServer<Request=R, Response=S>, 
@@ -92,7 +93,11 @@ impl<T, R, S> Server<T, R, S>
 
             let inner_handle = handle.clone();
 
-            let settings_response = framing::settings::SettingsFrameCompressModel::new();
+            let mut settings_response = framing::settings::SettingsFrameCompressModel::new();
+            settings_response.add_parameter(settings::SettingName::SettingsHeaderTableSize, 65536);
+            settings_response.add_parameter(settings::SettingName::SettingsInitialWindowSize, 131072);
+            settings_response.add_parameter(settings::SettingName::SettingsMaxFrameSize, 16384);
+
             let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
@@ -258,11 +263,13 @@ mod tests {
             println!("Got request {:?}", request);
 
             let mut headers = header::Headers::new();
-            headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
+            headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(200));
+            headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(111));
+            headers.push(header::HeaderName::ContentType, header::HeaderValue::Str(String::from("text/html")));
 
             HttpResponse {
                 headers: headers,
-                body: None
+                body: Some(String::from("<!DOCTYPE html><html><head><title>test</title></head><body><h1>Osmium served me like a beast</h1></body></html>"))
             }
         }
     }

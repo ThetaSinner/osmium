@@ -123,6 +123,9 @@ impl StreamResponse {
             if end_stream {
                 headers_frame.set_end_stream();
             }
+            if num_chunks == 1 {
+                headers_frame.set_end_headers();
+            }
             headers_frame.set_header_block_fragment(first_chunk.to_vec());
             temp_frames.push(Box::new(headers_frame));
         }

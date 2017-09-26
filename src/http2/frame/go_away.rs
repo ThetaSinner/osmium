@@ -91,6 +91,7 @@ impl CompressibleHttpFrame for GoAwayFrameCompressModel {
     }
 }
 
+#[derive(Debug)]
 pub struct GoAwayFrame {
     last_stream_identifier: u32,
     error_code: error::ErrorCode,
