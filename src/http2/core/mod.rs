@@ -183,6 +183,19 @@ impl<'a, 'b> Connection<'a, 'b> {
                     self.move_to_stream(frame_type, frame, app);
                 }
             },
+            framing::FrameType::Priority => {
+                if frame.header.stream_id == 0x0 {
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        // TODO this means a client using this error as a debug message won't know which frame caused a problem
+                        error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                // Do not process this frame yet. Priority isn't a feature that's required at all, especially in 
+                // an initial version of this server.
+            }
             _ => {
                 panic!("can't handle that frame type yet {:?}", frame_type);
             }
