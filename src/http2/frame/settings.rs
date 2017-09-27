@@ -25,6 +25,7 @@ use super::FrameType;
 
 const FLAG_ACK: u8 = 0x1;
 
+// TODO this has been copied out to the http2::settings module.
 #[derive(Debug)]
 pub struct SettingsParameter {
     name: settings::SettingName,

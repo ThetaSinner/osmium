@@ -16,3 +16,4 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 pub mod server_trait;
+pub mod server_settings;

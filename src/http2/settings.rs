@@ -25,6 +25,12 @@ pub enum SettingName {
     SettingsMaxHeaderListSize
 }
 
+#[derive(Debug)]
+pub struct SettingsParameter {
+    name: SettingName,
+    value: u32
+}
+
 impl From<SettingName> for u16 {
     fn from(name: SettingName) -> u16 {
         match name {
