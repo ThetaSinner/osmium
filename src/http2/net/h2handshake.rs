@@ -20,9 +20,10 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use std::io;
 use tokio_openssl::SslStream;
 use http2::frame as framing;
+use shared::server_settings::SecuritySettings;
 
 pub trait H2Handshake {
-    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
+    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>, security_settings: &SecuritySettings) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
         where S: AsyncRead + AsyncWrite + 'static;
 }
 

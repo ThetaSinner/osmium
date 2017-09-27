@@ -24,6 +24,7 @@ use std::io;
 use tokio_io;
 use tokio_openssl::{SslAcceptorExt, SslStream};
 use http2::frame as framing;
+use shared::server_settings::SecuritySettings;
 
 const PREFACE: [u8; 24] = [0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a];
 
@@ -38,10 +39,10 @@ impl HttpsH2Handshake {
 }
 
 impl h2handshake::H2Handshake for HttpsH2Handshake {
-    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
+    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>, security_settings: &SecuritySettings) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
         where S: AsyncRead + AsyncWrite + 'static
     {
-        let acceptor = openssl_helper::make_acceptor();
+        let acceptor = openssl_helper::make_acceptor(security_settings);
 
         Box::new(
             acceptor.accept_async(stream)

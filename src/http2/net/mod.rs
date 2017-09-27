@@ -44,14 +44,17 @@ use http2::hpack;
 use shared::server_trait;
 use http2::stream as streaming;
 use http2::settings;
+use shared::server_settings;
 
+// TODO this doesn't really belong in the net package.
 pub struct Server<T, R, S>
     where T: server_trait::OsmiumServer<Request=R, Response=S>, 
           R: convert::From<streaming::StreamRequest>,
           S: convert::Into<streaming::StreamResponse>
 {
     hpack: hpack::HPack,
-    app: T
+    app: T,
+    server_settings: server_settings::ServerSettings
 }
 
 impl<T, R, S> Server<T, R, S> 
@@ -59,10 +62,11 @@ impl<T, R, S> Server<T, R, S>
           R: 'static + convert::From<streaming::StreamRequest>,
           S: 'static + convert::Into<streaming::StreamResponse>
 {
-    pub fn new(app: T) -> Self {
+    pub fn new(app: T, server_settings: server_settings::ServerSettings) -> Self {
         Server {
             hpack: hpack::HPack::new(),
-            app: app
+            app: app,
+            server_settings: server_settings
         }
     }
 
@@ -77,7 +81,7 @@ impl<T, R, S> Server<T, R, S>
         let handle = event_loop.handle();
 
         // create a listener for incoming tcp connections
-        let addr = "127.0.0.1:8080".parse().unwrap();
+        let addr = format!("{}:{}", self.server_settings.get_host(), self.server_settings.get_port()).parse().unwrap();
         let listener = tokio_core::net::TcpListener::bind(&addr, &handle).unwrap();
 
         let thread_pool = Rc::new(ThreadPool::new(10));
@@ -98,7 +102,7 @@ impl<T, R, S> Server<T, R, S>
             settings_response.add_parameter(settings::SettingName::SettingsInitialWindowSize, 131072);
             settings_response.add_parameter(settings::SettingName::SettingsMaxFrameSize, 16384);
 
-            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
+            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response), server_instance.server_settings.get_security())
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
             })

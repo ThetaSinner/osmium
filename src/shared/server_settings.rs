@@ -24,7 +24,29 @@ pub struct ServerSettings {
 }
 
 pub struct SecuritySettings {
-    ssl_cert_path: String
+    ssl_cert_path: String,
+    ssl_cert_pass: String
+}
+
+impl SecuritySettings {
+    pub fn default() -> Self {
+        SecuritySettings {
+            ssl_cert_path: String::from("tests/certificate.pfx"),
+            ssl_cert_pass: String::from("asdf")
+        }
+    }
+
+    pub fn get_ssl_cert_path(&self) -> &str {
+        self.ssl_cert_path.as_ref()
+    }
+
+    pub fn set_ssl_cert_path(&mut self, ssl_cert_path: String) {
+        self.ssl_cert_path = ssl_cert_path;
+    }
+
+    pub fn get_ssl_cert_pass(&self) -> &str {
+        self.ssl_cert_pass.as_ref()
+    }
 }
 
 impl ServerSettings {
@@ -38,5 +60,25 @@ impl ServerSettings {
             security: None,
             http2_settings: None
         }
+    }
+
+    pub fn get_host(&self) -> &str {
+        self.host.as_ref()
+    }
+
+    pub fn get_port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn get_security(&self) -> &SecuritySettings {
+        if let Some(ref security) = self.security {
+            return security;
+        }
+        
+        panic!("Server not correctly configured. Expected security settings but none were found");
+    }
+
+    pub fn set_security(&mut self, security: SecuritySettings) {
+        self.security = Some(security);
     }
 }
