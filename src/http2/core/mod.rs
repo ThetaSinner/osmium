@@ -162,6 +162,17 @@ impl<'a, 'b> Connection<'a, 'b> {
                 self.send_frames.extend(stream.fetch_send_frames());
                 trace!("Finished processing headers on stream [{}]. Frames ready for send [{:?}]", frame.header.stream_id, self.send_frames);
             },
+            framing::FrameType::Data => {
+                if frame.header.stream_id == 0x0 {
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                self.move_to_stream(frame_type, frame, app);
+            },
             framing::FrameType::WindowUpdate => {
                 // TODO would be nice if this was a named operation.
                 if frame.header.stream_id == 0x0 {
