@@ -223,7 +223,7 @@ mod tests {
 
     use http2::header;
     use http2::stream as streaming;
-    use shared::server_trait;
+    use shared::{server_trait, server_settings};
 
     struct MyServer;
 
@@ -282,12 +282,10 @@ mod tests {
     fn test_start_server() {
         println!("start server");
         let handshake = https::HttpsH2Handshake::new();
-        Server::new(MyServer {}).start_server(handshake);
-    }
 
-    // MANUAL TESTING #[test]
-    fn test_receive_request_in_application() {
-        let handshake = https::HttpsH2Handshake::new();
-        Server::new(MyServer {}).start_server(handshake);
+        let mut settings = server_settings::ServerSettings::default();
+        settings.set_security(server_settings::SecuritySettings::default());
+
+        Server::new(MyServer {}, settings).start_server(handshake);
     }
 }
