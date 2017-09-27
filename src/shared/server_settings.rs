@@ -18,7 +18,7 @@ use http2::settings as http2_settings;
 
 pub struct ServerSettings {
     host: String,
-    port: u8,
+    port: u16,
     security: Option<SecuritySettings>,
     http2_settings: Option<Vec<http2_settings::SettingsParameter>>
 }
