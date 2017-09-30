@@ -18,11 +18,41 @@
 use http2::frame as framing;
 
 #[macro_export]
-macro_rules! log_frame {
+macro_rules! log_conn_frame {
     ( $msg:expr, $frame:expr ) => {
         #[cfg(feature = "osmium_support")]
         {
-            debug!("{}: {:?} {:?}", $msg, $frame.header, $frame.payload);
+            debug!("(conn) {}: {:?} {:?}", $msg, $frame.header, $frame.payload);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_conn_send_frame {
+    ( $msg:expr, $frame:expr ) => {
+        #[cfg(feature = "osmium_support")]
+        {
+            debug!("(conn) {}: {:?}", $msg, $frame);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_stream_recv {
+    ( $msg:expr, $id:expr, $state:expr, $frame:expr ) => {
+        #[cfg(feature = "osmium_support")]
+        {
+            debug!("(stream) {}: {}, {:?} {:?} {:?}", $msg, $id, $state, $frame.header, $frame.payload);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_stream_post_recv {
+    ( $msg:expr, $id:expr, $state:expr ) => {
+        #[cfg(feature = "osmium_support")]
+        {
+            debug!("(stream) {}: {}, {:?}", $msg, $id, $state);
         }
     };
 }

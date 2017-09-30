@@ -198,6 +198,8 @@ impl Stream {
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
     {
+        log_stream_recv!("Receive frame", self.id, self.state_name, frame);
+
         // TODO used a named tuple for this so that the errors are better and 
         // it is clearer where the yields are in the block below.
         let (opt_new_state, opt_err) = match self.state_name {
@@ -560,6 +562,8 @@ impl Stream {
         if let Some(new_state) = opt_new_state {
             self.state_name = new_state;
         }
+
+        log_stream_post_recv!("Post receive", self.id, self.state_name);
 
         // TODO should not try to process if an error occurred?
         // Process the request if it is fully received.

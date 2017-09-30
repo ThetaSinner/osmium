@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+#[derive(Debug)]
 pub enum StreamStateName {
     Idle(StreamState<StateIdle>),
     ReservedLocal(StreamState<StateReservedLocal>),
@@ -25,6 +26,7 @@ pub enum StreamStateName {
     Closed(StreamState<StateClosed>)
 }
 
+#[derive(Debug)]
 pub struct StreamState<S> {
     // This value is never accessed, but it is required to make the generics in the state
     // machine work.
@@ -42,12 +44,19 @@ impl StreamState<StateIdle> {
 }
 
 // Declare types for each state.
+#[derive(Debug)]
 pub struct StateIdle;
+#[derive(Debug)]
 pub struct StateReservedLocal;
+#[derive(Debug)]
 pub struct StateReservedRemote;
+#[derive(Debug)]
 pub struct StateOpen;
+#[derive(Debug)]
 pub struct StateHalfClosedLocal;
+#[derive(Debug)]
 pub struct StateHalfClosedRemote;
+#[derive(Debug)]
 pub struct StateClosed;
 
 // Declare valid transitions between states.

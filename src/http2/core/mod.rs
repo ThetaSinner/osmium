@@ -59,7 +59,7 @@ impl<'a, 'b> Connection<'a, 'b> {
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
-        log_frame!("Receive frame", frame);
+        log_conn_frame!("Receive frame", frame);
 
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
@@ -262,6 +262,8 @@ impl<'a, 'b> Connection<'a, 'b> {
 
     // Queues a frame to be sent.
     fn push_send_frame(&mut self, frame: Box<framing::CompressibleHttpFrame>, stream_id: framing::StreamId) {
+        log_conn_send_frame!("Pushing frame for send", frame);
+
         self.send_frames.push_back(
             framing::compress_frame(frame, stream_id)
         );
