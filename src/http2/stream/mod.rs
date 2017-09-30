@@ -523,6 +523,14 @@ impl Stream {
                         // TODO log and discard instead panic.
                         unimplemented!();
                     },
+                    framing::FrameType::WindowUpdate => {
+                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
+
+                        self.send_window += window_update_frame.get_window_size_increment();
+
+                        // TODO there is an error to be handled here if the frame decode fails.
+                        (None, None)
+                    },
                     _ => {
                         // TODO there is more to do here. There is a small race condition, where the stream might be closed
                         // because we've sent a reset or end stream but they haven't been received by the peer.
