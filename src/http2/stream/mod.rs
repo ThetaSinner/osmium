@@ -524,11 +524,11 @@ impl Stream {
                         unimplemented!();
                     },
                     framing::FrameType::WindowUpdate => {
-                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
-
-                        self.send_window += window_update_frame.get_window_size_increment();
-
-                        // TODO there is an error to be handled here if the frame decode fails.
+                        // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
+                        (None, None)
+                    },
+                    framing::FrameType::ResetStream => {
+                        // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
                         (None, None)
                     },
                     _ => {
