@@ -15,18 +15,5 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-// This module has been made public because it makes easier to generate documentation
-// and because it does little harm to make it public, so long as the documentation makes
-// it clear how to use the library, and that this module is intended for internal use.
-pub mod hpack;
-
 #[macro_use]
-pub mod support;
-pub mod header;
-pub mod frame;
-pub mod stream;
-pub mod error;
-pub mod settings;
-pub mod net;
-pub mod core;
-pub mod request;
+pub mod log;

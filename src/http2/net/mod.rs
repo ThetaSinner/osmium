@@ -278,7 +278,7 @@ mod tests {
         }
     }
 
-    // MANUAL TESTING #[test]
+    #[test]
     fn test_start_server() {
         println!("start server");
         let handshake = https::HttpsH2Handshake::new();

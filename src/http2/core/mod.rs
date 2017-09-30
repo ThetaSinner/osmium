@@ -59,6 +59,8 @@ impl<'a, 'b> Connection<'a, 'b> {
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
+        log_frame!("Receive frame", frame);
+
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),

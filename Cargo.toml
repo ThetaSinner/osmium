@@ -25,3 +25,7 @@ httparse = "1.2.3"
 [dev-dependencies]
 rustc_version = "0.2.1"
 curl = "0.4.7"
+
+[features]
+default=[]
+osmium_support = []
