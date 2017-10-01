@@ -31,6 +31,29 @@ pub struct SettingsParameter {
     value: u32
 }
 
+#[derive(Debug)]
+pub struct Settings {
+    pub header_table_size: u32,
+    pub enable_push: bool,
+    pub max_concurrent_streams: u32,
+    pub initial_window_size: u32,
+    pub max_frame_size: u32,
+    pub max_header_list_size: Option<u32>
+}
+
+impl Settings {
+    pub fn spec_default() -> Self {
+        Settings {
+            header_table_size: 4096,
+            enable_push: true,
+            max_concurrent_streams: 100,
+            initial_window_size: 65535,
+            max_frame_size: 16384,
+            max_header_list_size: None
+        }
+    }
+}
+
 impl From<SettingName> for u16 {
     fn from(name: SettingName) -> u16 {
         match name {

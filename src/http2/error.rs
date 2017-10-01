@@ -108,7 +108,8 @@ pub enum ErrorName {
     UnexpectedContinuationFrame,
     UnexpectedFrameOnHalfClosedStream,
     StreamIsClosed,
-    ZeroWindowSizeIncrement
+    ZeroWindowSizeIncrement,
+    EnablePushSettingInvalidValue
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -146,6 +147,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::ZeroWindowSizeIncrement => {
                 "zero window size increment"
+            },
+            ErrorName::EnablePushSettingInvalidValue => {
+                "enable push setting invalid value"
             }
         }.to_owned().as_bytes().to_vec()
     }

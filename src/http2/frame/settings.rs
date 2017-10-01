@@ -32,6 +32,16 @@ pub struct SettingsParameter {
     value: u32
 }
 
+impl SettingsParameter {
+    pub fn get_name(&self) -> &settings::SettingName {
+        &self.name
+    }
+
+    pub fn get_value(&self) -> u32 {
+        self.value
+    }
+}
+
 #[derive(Debug)]
 pub struct SettingsFrameCompressModel {
     flags: u8,

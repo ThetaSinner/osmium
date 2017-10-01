@@ -29,6 +29,7 @@ use http2::error;
 use http2::stream as streaming;
 use http2::hpack::context as hpack_context;
 use shared::server_trait;
+use http2::settings;
 
 pub struct Connection<'a, 'b> {
     send_frames: VecDeque<Vec<u8>>,
@@ -38,6 +39,8 @@ pub struct Connection<'a, 'b> {
     hpack_send_context: hpack_context::Context<'b>,
 
     streams: HashMap<framing::StreamId, streaming::Stream>,
+
+    incoming_settings: settings::Settings,
 
     send_window: u32
 }
@@ -50,6 +53,7 @@ impl<'a, 'b> Connection<'a, 'b> {
             hpack_recv_context: hpack_recv_context,
             hpack_send_context: hpack_send_context,
             streams: HashMap::new(),
+            incoming_settings: settings::Settings::spec_default(),
             send_window: 0
         }
     }
@@ -210,7 +214,18 @@ impl<'a, 'b> Connection<'a, 'b> {
                 // an initial version of this server.
             },
             framing::FrameType::Settings => {
-                // TODO handle settings payload.
+                if frame.header.stream_id != 0x0 {
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        // TODO this means a client using this error as a debug message won't know which frame caused a problem
+                        error::ErrorName::StreamIdentifierOnConnectionFrame
+                    ));
+                    return;
+                }
+
+                let settings_frame = framing::settings::SettingsFrame::new(&frame.header, &mut frame.payload.into_iter());
+
+                self.apply_settings(settings_frame);
             }
             framing::FrameType::GoAway => {
                 let go_away_frame = framing::go_away::GoAwayFrame::new(&frame.header, &mut frame.payload.into_iter());
@@ -281,5 +296,45 @@ impl<'a, 'b> Connection<'a, 'b> {
     // TODO do a fetch all like in stream?
     pub fn pull_frame(&mut self) -> Option<Vec<u8>> {
         self.send_frames.pop_front()
+    }
+
+    fn apply_settings(&mut self, settings_frame: framing::settings::SettingsFrame) {
+        for setting in settings_frame.get_parameters() {
+            match setting.get_name() {
+                &settings::SettingName::SettingsHeaderTableSize => {
+                    unimplemented!();
+                },
+                &settings::SettingName::SettingsEnablePush => {
+                    match setting.get_value() {
+                        0 => {
+                            self.incoming_settings.enable_push = false;
+                        },
+                        1 => {
+                            self.incoming_settings.enable_push = true;
+                        },
+                        _ => {
+                            self.push_send_go_away_frame(
+                                error::HttpError::ConnectionError(
+                                    error::ErrorCode::ProtocolError,
+                                    error::ErrorName::EnablePushSettingInvalidValue
+                                )
+                            );
+                        }
+                    }
+                },
+                &settings::SettingName::SettingsMaxConcurrentStreams => {
+                    unimplemented!();
+                },
+                &settings::SettingName::SettingsInitialWindowSize => {
+                    unimplemented!();
+                },
+                &settings::SettingName::SettingsMaxFrameSize => {
+                    unimplemented!();
+                },
+                &settings::SettingName::SettingsMaxHeaderListSize => {
+                    unimplemented!();
+                }
+            }
+        }
     }
 }
