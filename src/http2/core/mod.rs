@@ -307,12 +307,18 @@ impl<'a, 'b> Connection<'a, 'b> {
                 &settings::SettingName::SettingsEnablePush => {
                     match setting.get_value() {
                         0 => {
+                            // TODO when push promise is disabled remotely then any streams which
+                            // are reserved remote need to be reset.
                             self.incoming_settings.enable_push = false;
                         },
                         1 => {
+                            // There is nothing to be done when this setting is switched on. The next
+                            // time the application wants to push promise it will be enabled.
                             self.incoming_settings.enable_push = true;
                         },
                         _ => {
+                            // (6.5.2) Any value other than 0 or 1 MUST be treated as a connection 
+                            // error (Section 5.4.1) of type PROTOCOL_ERROR.
                             self.push_send_go_away_frame(
                                 error::HttpError::ConnectionError(
                                     error::ErrorCode::ProtocolError,
