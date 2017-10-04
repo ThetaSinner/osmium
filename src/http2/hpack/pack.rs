@@ -17,7 +17,7 @@
 
 // osmium
 use http2::header;
-use http2::hpack::context;
+use http2::hpack::context::{self, ContextTrait};
 use http2::hpack::flags;
 use http2::hpack::number;
 use http2::hpack::string;
@@ -41,7 +41,7 @@ const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [
 
 // TODO comments need updating, they're still the ones I wrote while puzzling out the encoder.
 
-pub fn pack(headers: &header::Headers, context: &mut context::Context, use_huffman_coding: bool) -> Vec<u8> {
+pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_huffman_coding: bool) -> Vec<u8> {
     let mut target = Vec::new();
 
     for header in headers.iter() {

@@ -128,7 +128,10 @@ impl<T, R, S> Server<T, R, S>
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
-                            let mut connection = core::Connection::new(server_instance.hpack.new_context(), server_instance.hpack.new_context());
+                            let mut connection = core::Connection::new(
+                                server_instance.hpack.new_send_context(), 
+                                server_instance.hpack.new_recv_context()
+                            );
 
                             let mut msg_iter = rx.iter();
                             while let Some(msg) = msg_iter.next() {

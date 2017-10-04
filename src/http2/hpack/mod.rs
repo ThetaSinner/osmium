@@ -25,7 +25,7 @@ pub mod pack;
 pub mod flags;
 
 use self::table::{Table, Field};
-use self::context::Context;
+use self::context::{SendContext, RecvContext, ContextTrait};
 
 /// The number of items in the static table as defined in hpack section 2.3.1
 pub const STATIC_TABLE_LENGTH: usize = 61;
@@ -117,14 +117,20 @@ impl HPack {
 
     /// Create a new `Context` structure with a reference to the static table owned by this 
     /// `HPack` instance.
-    pub fn new_context(&self) -> Context {
-        Context::new(&self.static_table)
+    // TODO update docs.
+    pub fn new_send_context(&self) -> SendContext {
+        SendContext::new(&self.static_table)
+    }
+
+    pub fn new_recv_context(&self) -> RecvContext {
+        RecvContext::new(&self.static_table)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{HPack, pack, unpack, context};
+    use http2::hpack::context::ContextTrait;
     use http2::header;
 
     fn to_hex_dump(data: &[u8]) -> String {
@@ -167,7 +173,7 @@ mod tests {
         }
     }
 
-    fn assert_table_entry(context: &context::Context, index: usize, name: &str, value: &str) {
+    fn assert_table_entry<'a, T: ContextTrait<'a>>(context: &T, index: usize, name: &str, value: &str) {
         let dynamic_table_entry = context.get(index);
         assert!(dynamic_table_entry.is_some());
         let field = dynamic_table_entry.unwrap();
@@ -179,7 +185,7 @@ mod tests {
     #[test]
     pub fn encode_custom_header() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -197,7 +203,7 @@ mod tests {
     #[test]
     pub fn decode_custom_header() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -208,7 +214,7 @@ mod tests {
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
-        let mut decoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_recv_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
         // assert the decoded headers.
@@ -223,7 +229,7 @@ mod tests {
     #[test]
     pub fn encode_literal_field_without_indexing() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -241,7 +247,7 @@ mod tests {
     #[test]
     pub fn decode_literal_field_without_indexing() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -252,7 +258,7 @@ mod tests {
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
-        let mut decoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_recv_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
         // assert the decoded headers.
@@ -269,7 +275,7 @@ mod tests {
     #[test]
     pub fn encode_literal_field_never_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -290,7 +296,7 @@ mod tests {
     #[test]
     pub fn decode_literal_field_never_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -304,7 +310,7 @@ mod tests {
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
-        let mut decoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_recv_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
         // assert the decoded headers.
@@ -318,7 +324,7 @@ mod tests {
     #[test]
     pub fn encode_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -338,7 +344,7 @@ mod tests {
     #[test]
     pub fn decode_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -351,7 +357,7 @@ mod tests {
 
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
-        let mut decoding_context = hpack.new_context();
+        let mut decoding_context = hpack.new_recv_context();
         let decoded = unpack::unpack(&encoded, &mut decoding_context);
 
         // assert the decoded headers.
@@ -373,8 +379,8 @@ mod tests {
         let hpack = HPack::new();
 
         // These two contexts are the only state, everything else is only used in request processing.
-        let mut encoding_context = hpack.new_context();
-        let mut decoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
+        let mut decoding_context = hpack.new_recv_context();
 
         // Request 1
         {
@@ -534,8 +540,8 @@ mod tests {
         response_three_hex_dump: &str
     ) {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_context();
-        let mut decoding_context = hpack.new_context();
+        let mut encoding_context = hpack.new_send_context();
+        let mut decoding_context = hpack.new_recv_context();
 
         // This example uses a dynamic table with max size 256 bytes, so that some evictions occur.
         encoding_context.set_max_size(256);

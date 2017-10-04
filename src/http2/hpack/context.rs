@@ -37,9 +37,46 @@ pub struct Context<'a> {
 
 // TODO Field type needs to go and be replaced by Header types.
 
-impl<'a> Context<'a> {
+pub trait ContextTrait<'a> {
     /// Create a new context object with a reference to the given static table.
-    pub fn new(static_table: &'a table::Table) -> Self {
+    fn new(static_table: &'a table::Table) -> Self;
+
+    /// Inserts a header into the dynamic table. As per section 2.3.3, insertion is at the front
+    /// of the dynamic table. Equivalently, the insertion point is after the end of the static table.
+    fn insert(&mut self, field: Field);
+
+    /// Get by index, where index is from 1 to static_table length + dynamic table length/
+    /// See hpack section 2.3.3 on the single address space.
+    fn get(&self, index: usize) -> Option<&Field>;
+
+    /// Returns the best match with the lowest matching index, or none otherwise.
+    /// The tuple returned contains the index matched and a flag indicating whether the 
+    /// header value matches. If there is a possible match with this flag true, then it is 
+    /// prefered over a match with the flag false.
+    /// The index returned refers to the single address space.
+    fn find_field(&self, field: &Field) -> Option<(usize, bool)>;
+
+    /// The size of the dynamic table in bytes. See hpack section 4.1
+    fn size(&self) -> usize;
+
+    /// Set the maximum size the dynamic table is permitted to use. This value must be
+    /// less than SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2.
+    ///
+    /// Note that reducing the size of the dynamic table may cause entry eviction, as per
+    /// hpack section 4.3.
+    ///
+    // TODO the hpack spec does not define how to handle an error (value larger than size setting),
+    // so this code should be modified after reading the http2 spec.
+    // UPDATE the max size can't just be set, the decoder needs to be notified if the encoder size 
+    // is updated. As for handling updating to be too large, that is only going to happen if this
+    // application does something stupid, so ending the connection with NO_ERROR or similar is 
+    // probably the way forward.
+    fn set_max_size(&mut self, max_size: usize);
+}
+
+impl<'a> ContextTrait<'a> for Context<'a> {
+    /// Create a new context object with a reference to the given static table.
+    fn new(static_table: &'a table::Table) -> Self {
         Context {
             static_table: static_table,
             dynamic_table: table::Table::new()
@@ -48,13 +85,13 @@ impl<'a> Context<'a> {
 
     /// Inserts a header into the dynamic table. As per section 2.3.3, insertion is at the front
     /// of the dynamic table. Equivalently, the insertion point is after the end of the static table.
-    pub fn insert(&mut self, field: Field) {
+    fn insert(&mut self, field: Field) {
         self.dynamic_table.push_front(field);
     }
 
     /// Get by index, where index is from 1 to static_table length + dynamic table length/
     /// See hpack section 2.3.3 on the single address space.
-    pub fn get(&self, index: usize) -> Option<&Field> {
+    fn get(&self, index: usize) -> Option<&Field> {
         // check that the input index refers to a table index rather than a vector index.
         assert!(1 <= index);
 
@@ -72,7 +109,7 @@ impl<'a> Context<'a> {
     /// header value matches. If there is a possible match with this flag true, then it is 
     /// prefered over a match with the flag false.
     /// The index returned refers to the single address space.
-    pub fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
+    fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
         let opt_static_index = self.static_table.find_field(field);
 
         // TODO how very untidy.
@@ -108,7 +145,7 @@ impl<'a> Context<'a> {
     }
 
     /// The size of the dynamic table in bytes. See hpack section 4.1
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         self.dynamic_table.get_size()
     }
 
@@ -124,8 +161,20 @@ impl<'a> Context<'a> {
     // is updated. As for handling updating to be too large, that is only going to happen if this
     // application does something stupid, so ending the connection with NO_ERROR or similar is 
     // probably the way forward.
-    pub fn set_max_size(&mut self, max_size: usize) {
+    fn set_max_size(&mut self, max_size: usize) {
         self.dynamic_table.set_max_size(max_size);
+    }
+}
+
+pub struct SendContext<'a> {
+    inner: Context<'a>
+}
+
+impl<'a> SendContext<'a> {
+    pub fn new(static_table: &'a table::Table) -> Self {
+        SendContext {
+            inner: Context::new(static_table)
+        }
     }
 
     /// Informs the context of a change to SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2
@@ -139,3 +188,68 @@ impl<'a> Context<'a> {
         // Look at the pen of pain I opened...
     }
 }
+
+impl<'a> ContextTrait<'a> for SendContext<'a> {
+    fn new(static_table: &'a table::Table) -> Self {
+        SendContext {
+            inner: Context::new(static_table)
+        }
+    }
+
+    fn insert(&mut self, field: Field) {
+        self.inner.insert(field)
+    }
+
+    fn get(&self, index: usize) -> Option<&Field> {
+        self.inner.get(index)
+    }
+
+    fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
+        self.inner.find_field(field)
+    }
+
+    fn size(&self) -> usize {
+        self.inner.size()
+    }
+
+    fn set_max_size(&mut self, max_size: usize) {
+        self.inner.set_max_size(max_size);
+    }
+}
+
+pub struct RecvContext<'a> {
+    inner: Context<'a>
+}
+
+impl<'a> RecvContext<'a> {
+    // TODO move set_max_size to here and modify it
+}
+
+impl<'a> ContextTrait<'a> for RecvContext<'a> {
+    fn new(static_table: &'a table::Table) -> Self {
+        RecvContext {
+            inner: Context::new(static_table)
+        }
+    }
+
+    fn insert(&mut self, field: Field) {
+        self.inner.insert(field)
+    }
+
+    fn get(&self, index: usize) -> Option<&Field> {
+        self.inner.get(index)
+    }
+
+    fn find_field(&self, field: &Field) -> Option<(usize, bool)> {
+        self.inner.find_field(field)
+    }
+
+    fn size(&self) -> usize {
+        self.inner.size()
+    }
+
+    fn set_max_size(&mut self, max_size: usize) {
+        self.inner.set_max_size(max_size);
+    }
+}
+

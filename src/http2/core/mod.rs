@@ -31,12 +31,12 @@ use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
 
-pub struct Connection<'a, 'b> {
+pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
     frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
 
-    hpack_recv_context: hpack_context::Context<'a>,
-    hpack_send_context: hpack_context::Context<'b>,
+    hpack_send_context: hpack_context::SendContext<'a>,
+    hpack_recv_context: hpack_context::RecvContext<'a>,
 
     streams: HashMap<framing::StreamId, streaming::Stream>,
 
@@ -45,13 +45,13 @@ pub struct Connection<'a, 'b> {
     send_window: u32
 }
 
-impl<'a, 'b> Connection<'a, 'b> {
-    pub fn new(hpack_recv_context: hpack_context::Context<'a>, hpack_send_context: hpack_context::Context<'b>) -> Connection<'a, 'b> {
+impl<'a> Connection<'a> {
+    pub fn new(hpack_send_context: hpack_context::SendContext<'a>, hpack_recv_context: hpack_context::RecvContext<'a>) -> Connection<'a> {
         Connection {
             send_frames: VecDeque::new(),
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
-            hpack_recv_context: hpack_recv_context,
             hpack_send_context: hpack_send_context,
+            hpack_recv_context: hpack_recv_context,
             streams: HashMap::new(),
             incoming_settings: settings::Settings::spec_default(),
             send_window: 0
@@ -152,8 +152,8 @@ impl<'a, 'b> Connection<'a, 'b> {
                         },
                         payload: frame.payload
                     },
-                    &mut self.hpack_recv_context,
                     &mut self.hpack_send_context,
+                    &mut self.hpack_recv_context,
                     app
                 );
 
@@ -259,8 +259,8 @@ impl<'a, 'b> Connection<'a, 'b> {
                 },
                 payload: frame.payload
             },
-            &mut self.hpack_recv_context,
             &mut self.hpack_send_context,
+            &mut self.hpack_recv_context,
             app
         );
 

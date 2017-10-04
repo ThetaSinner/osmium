@@ -53,8 +53,8 @@ impl StreamRequest {
     }
 
     // TODO will return an error.
-    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_context: &mut hpack_context::Context) {
-        let decoded = hpack_unpack::unpack(temp_header_block, hpack_context);
+    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_recv_context: &mut hpack_context::RecvContext) {
+        let decoded = hpack_unpack::unpack(temp_header_block, hpack_recv_context);
 
         // TODO can the header block be empty? because that will break the logic below.
 
@@ -75,7 +75,7 @@ impl StreamRequest {
 }
 
 impl StreamResponse {
-    pub fn to_frames(self, hpack_context: &mut hpack_context::Context) -> Vec<Box<framing::CompressibleHttpFrame>>
+    pub fn to_frames(self, hpack_send_context: &mut hpack_context::SendContext) -> Vec<Box<framing::CompressibleHttpFrame>>
     {
         trace!("Starting to convert stream response to frames [{:?}]", self);
 
@@ -83,11 +83,11 @@ impl StreamResponse {
 
         for informational_header in &self.informational_headers {
             frames.extend(
-                StreamResponse::headers_to_frames(informational_header, hpack_context, false)
+                StreamResponse::headers_to_frames(informational_header, hpack_send_context, false)
             );
         }
 
-        let headers = StreamResponse::headers_to_frames(&self.headers, hpack_context, self.payload.is_none() && self.trailer_headers.is_none());
+        let headers = StreamResponse::headers_to_frames(&self.headers, hpack_send_context, self.payload.is_none() && self.trailer_headers.is_none());
         frames.extend(headers);
 
         if self.payload.is_some() {
@@ -100,7 +100,7 @@ impl StreamResponse {
         }
 
         if self.trailer_headers.is_some() {
-            let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_context, true);
+            let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_send_context, true);
             frames.extend(trailer_headers_frame);
         }
 
@@ -109,11 +109,11 @@ impl StreamResponse {
         frames
     }
 
-    fn headers_to_frames(headers: &header::Headers, hpack_context: &mut hpack_context::Context, end_stream: bool) -> Vec<Box<framing::CompressibleHttpFrame>>
+    fn headers_to_frames(headers: &header::Headers, hpack_send_context: &mut hpack_context::SendContext, end_stream: bool) -> Vec<Box<framing::CompressibleHttpFrame>>
     {
         let mut temp_frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
 
-        let packed = hpack_pack::pack(&headers, hpack_context, true);
+        let packed = hpack_pack::pack(&headers, hpack_send_context, true);
         let num_chunks = ((packed.len() as f32) / 150f32).ceil() as i32;
         let mut chunk_count = 1;
         let mut chunks = packed.chunks(150);
@@ -190,8 +190,8 @@ impl Stream {
     pub fn recv<T, R, S>(
         &mut self, 
         frame: framing::StreamFrame, 
-        hpack_recv_context: &mut hpack_context::Context,
-        hpack_send_context: &mut hpack_context::Context,
+        hpack_send_context: &mut hpack_context::SendContext,
+        hpack_recv_context: &mut hpack_context::RecvContext,
         app: &T
     ) -> Option<error::HttpError> 
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
@@ -770,7 +770,7 @@ impl Stream {
         !self.request.headers.is_empty()
     }
 
-    fn try_start_process<T, R, S>(&mut self, app: &T, hpack_send_context: &mut hpack_context::Context) 
+    fn try_start_process<T, R, S>(&mut self, app: &T, hpack_send_context: &mut hpack_context::SendContext) 
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>

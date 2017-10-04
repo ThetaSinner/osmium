@@ -19,7 +19,7 @@
 use http2::header;
 use http2::hpack::number;
 use http2::hpack::string;
-use http2::hpack::context;
+use http2::hpack::context::{self, ContextTrait};
 use http2::hpack::table;
 use http2::hpack::flags;
 
@@ -29,7 +29,7 @@ pub struct UnpackedHeaders {
     pub octets_read: usize
 }
 
-pub fn unpack(data: &[u8], context: &mut context::Context) -> UnpackedHeaders {
+pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> UnpackedHeaders {
     let mut unpacked_headers = UnpackedHeaders {
         headers: header::Headers::new(),
         octets_read: 0
