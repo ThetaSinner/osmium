@@ -302,7 +302,21 @@ impl<'a, 'b> Connection<'a, 'b> {
         for setting in settings_frame.get_parameters() {
             match setting.get_name() {
                 &settings::SettingName::SettingsHeaderTableSize => {
-                    unimplemented!();
+                    // This sets the maximum size that the local encoder can use. 
+                    //
+                    // The remote encoder can reduce the space it's using and communicate that 
+                    // reduction within hpack. So if the remote decoder needs to use less space, 
+                    // then it must update this setting.
+                    // 
+                    // Therefore, when this setting arrives the local encoder must be notified.
+                    // The encoder will then reduce the size it's using as the first instruction
+                    // in the next header block.
+
+                    // TODO Currently, this saves the current value, but probably isn't necesary.
+                    self.incoming_settings.header_table_size = setting.get_value();
+
+                    // Inform the send context that the max size setting has changed.
+                    self.hpack_send_context.inform_max_size_setting_changed(self.incoming_settings.header_table_size);
                 },
                 &settings::SettingName::SettingsEnablePush => {
                     match setting.get_value() {
@@ -342,5 +356,7 @@ impl<'a, 'b> Connection<'a, 'b> {
                 }
             }
         }
+
+        // TODO acknowledge the settings by sending a setting acknowledge frame.
     }
 }

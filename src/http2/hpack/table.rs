@@ -158,8 +158,4 @@ impl Table {
             self.size -= popped.name.len() + popped.value.len() + 32;
         }
     }
-
-    pub fn inform_max_size_setting_changed(&mut self, max_size_setting: u32) {
-        
-    }
 }

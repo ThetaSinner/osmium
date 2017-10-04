@@ -120,7 +120,22 @@ impl<'a> Context<'a> {
     ///
     // TODO the hpack spec does not define how to handle an error (value larger than size setting),
     // so this code should be modified after reading the http2 spec.
+    // UPDATE the max size can't just be set, the decoder needs to be notified if the encoder size 
+    // is updated. As for handling updating to be too large, that is only going to happen if this
+    // application does something stupid, so ending the connection with NO_ERROR or similar is 
+    // probably the way forward.
     pub fn set_max_size(&mut self, max_size: usize) {
         self.dynamic_table.set_max_size(max_size);
+    }
+
+    /// Informs the context of a change to SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2
+    /// 
+    // TODO Create two traits, one for send and one for recv contexts. This will then only
+    // be on the send context.
+    pub fn inform_max_size_setting_changed(&mut self, max_size_setting: u32) {
+        // TODO the pack code doesn't handle sending a size update, so there's no point
+        // writing this code until the pack code is modified. In which case it makes
+        // sense to handle the TODO above.
+        // Look at the pen of pain I opened...
     }
 }
