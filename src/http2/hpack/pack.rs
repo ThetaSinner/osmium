@@ -44,6 +44,21 @@ const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [
 pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_huffman_coding: bool) -> Vec<u8> {
     let mut target = Vec::new();
 
+    // Check whether a decision has been made to change the dynamic table size.
+    if let Some(size_update) = context.get_size_update() {
+        // Update the size of the dynamic table used by the send context. This may cause evictions
+        // if the size is reduced.
+        // This could be done as soon as the decision to change the size is made, which might free
+        // up memory sooner. However, doing it here means that the change is always made at the same 
+        // time as the signal to the remote table is created.
+        // TODO handle error here if the size_update is larger than the allowed size?
+        // TODO why is that taking usize?
+        context.set_max_size(size_update as usize);
+
+        // The size update signal is sent to the remote decoding table.
+        pack_dynamic_table_size_update(size_update, &mut target);
+    }
+
     for header in headers.iter() {
         let field = table::Field {
             name: String::from(header.name.clone()),
@@ -195,4 +210,13 @@ fn pack_literal_never_indexed(header: &header::Header, use_huffman_coding: bool,
     target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
     // deliberately do not allow override of huffman coding for the value
     target.extend(string::encode(String::from(header.value.clone()), false));
+}
+
+fn pack_dynamic_table_size_update(size_update: u32, target: &mut Vec<u8>) {
+    let encoded_size_update = number::encode(size_update, 5);
+
+    target.push(flags::SIZE_UPDATE_FLAG | encoded_size_update.prefix);
+    if let Some(rest) = encoded_size_update.rest {
+        target.extend(rest);
+    }
 }

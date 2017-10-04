@@ -57,6 +57,7 @@ pub trait ContextTrait<'a> {
     fn find_field(&self, field: &Field) -> Option<(usize, bool)>;
 
     /// The size of the dynamic table in bytes. See hpack section 4.1
+    // TODO it's not quite the size in bytes, update docs.
     fn size(&self) -> usize;
 
     /// Set the maximum size the dynamic table is permitted to use. This value must be
@@ -167,32 +168,39 @@ impl<'a> ContextTrait<'a> for Context<'a> {
 }
 
 pub struct SendContext<'a> {
-    inner: Context<'a>
+    inner: Context<'a>,
+
+    send_size_update: bool,
+    size_update: u32
 }
 
 impl<'a> SendContext<'a> {
-    pub fn new(static_table: &'a table::Table) -> Self {
-        SendContext {
-            inner: Context::new(static_table)
-        }
+    /// Informs the context of a change to SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2
+    pub fn inform_max_size_setting_changed(&mut self, max_size_setting: u32) {
+        // For now, don't do anything, just let the max size setting drive this.
+        self.size_update = max_size_setting;
+        self.send_size_update = true;
     }
 
-    /// Informs the context of a change to SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2
-    /// 
-    // TODO Create two traits, one for send and one for recv contexts. This will then only
-    // be on the send context.
-    pub fn inform_max_size_setting_changed(&mut self, max_size_setting: u32) {
-        // TODO the pack code doesn't handle sending a size update, so there's no point
-        // writing this code until the pack code is modified. In which case it makes
-        // sense to handle the TODO above.
-        // Look at the pen of pain I opened...
+    pub fn get_size_update(&mut self) -> Option<u32> {
+        if self.send_size_update {
+            self.send_size_update = false;
+            return Some(self.size_update)
+            // TODO note that size_update isn't cleared. Should it be, and how can it be 
+            // made obvious that it has been cleared?
+        }
+        
+        None
     }
 }
 
 impl<'a> ContextTrait<'a> for SendContext<'a> {
     fn new(static_table: &'a table::Table) -> Self {
         SendContext {
-            inner: Context::new(static_table)
+            inner: Context::new(static_table),
+
+            send_size_update: false,
+            size_update: 0
         }
     }
 
@@ -219,10 +227,6 @@ impl<'a> ContextTrait<'a> for SendContext<'a> {
 
 pub struct RecvContext<'a> {
     inner: Context<'a>
-}
-
-impl<'a> RecvContext<'a> {
-    // TODO move set_max_size to here and modify it
 }
 
 impl<'a> ContextTrait<'a> for RecvContext<'a> {
