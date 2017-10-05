@@ -177,6 +177,8 @@ pub struct SendContext<'a> {
 impl<'a> SendContext<'a> {
     /// Informs the context of a change to SETTINGS_HEADER_TABLE_SIZE, see http2 6.5.2
     pub fn inform_max_size_setting_changed(&mut self, max_size_setting: u32) {
+        // TODO handle multiple max size setting updates between header encodes.
+
         // For now, don't do anything, just let the max size setting drive this.
         self.size_update = max_size_setting;
         self.send_size_update = true;
