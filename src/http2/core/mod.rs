@@ -355,7 +355,7 @@ impl<'a> Connection<'a> {
                     let val = setting.get_value();
 
                     if settings::INITIAL_MAX_FRAME_SIZE <= val && val <= settings::MAXIMUM_MAX_FRAME_SIZE {
-                        self.incoming_settings = val;
+                        self.incoming_settings.max_frame_size = val;
                     }
                     else {
                         // (6.5.2) The initial value is 214 (16,384) octets. The value advertised by an endpoint MUST be between this initial 

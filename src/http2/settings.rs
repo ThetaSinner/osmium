@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-const INITIAL_MAX_FRAME_SIZE: u32 = 0x4000;
-const MAXIMUM_MAX_FRAME_SIZE: i32 = 0xFFFFFF;
+pub const INITIAL_MAX_FRAME_SIZE: u32 = 0x4000;
+pub const MAXIMUM_MAX_FRAME_SIZE: u32 = 0xFFFFFF;
 
 #[derive(Debug)]
 pub enum SettingName {
