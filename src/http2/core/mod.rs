@@ -343,13 +343,31 @@ impl<'a> Connection<'a> {
                     }
                 },
                 &settings::SettingName::SettingsMaxConcurrentStreams => {
+                    // TODO need to refuse to open new streams if it would exceed the remote limit (for a server this is just limiting the number of push promises)
+                    // TODO need to send reset stream with stream refused if the client exceeds the limit we've set. If the client continues to try to open streams
+                    // very quickly while open streams are sill being processed then we can send reset with enhance your calm :)
                     unimplemented!();
                 },
                 &settings::SettingName::SettingsInitialWindowSize => {
                     unimplemented!();
                 },
                 &settings::SettingName::SettingsMaxFrameSize => {
-                    unimplemented!();
+                    let val = setting.get_value();
+
+                    if settings::INITIAL_MAX_FRAME_SIZE <= val && val <= settings::MAXIMUM_MAX_FRAME_SIZE {
+                        self.incoming_settings = val;
+                    }
+                    else {
+                        // (6.5.2) The initial value is 214 (16,384) octets. The value advertised by an endpoint MUST be between this initial 
+                        // value and the maximum allowed frame size (224-1 or 16,777,215 octets), inclusive. Values outside this range MUST 
+                        // be treated as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
+                        self.push_send_go_away_frame(
+                            error::HttpError::ConnectionError(
+                                error::ErrorCode::ProtocolError,
+                                error::ErrorName::InvalidMaxFrameSize
+                            )
+                        );
+                    }
                 },
                 &settings::SettingName::SettingsMaxHeaderListSize => {
                     unimplemented!();

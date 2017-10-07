@@ -109,7 +109,8 @@ pub enum ErrorName {
     UnexpectedFrameOnHalfClosedStream,
     StreamIsClosed,
     ZeroWindowSizeIncrement,
-    EnablePushSettingInvalidValue
+    EnablePushSettingInvalidValue,
+    InvalidMaxFrameSize
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -150,6 +151,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::EnablePushSettingInvalidValue => {
                 "enable push setting invalid value"
+            }
+            ErrorName::InvalidMaxFrameSize => {
+                "invalid max frame size"
             }
         }.to_owned().as_bytes().to_vec()
     }
