@@ -346,15 +346,38 @@ impl<'a> Connection<'a> {
                     // TODO need to refuse to open new streams if it would exceed the remote limit (for a server this is just limiting the number of push promises)
                     // TODO need to send reset stream with stream refused if the client exceeds the limit we've set. If the client continues to try to open streams
                     // very quickly while open streams are sill being processed then we can send reset with enhance your calm :)
-                    unimplemented!();
+                    self.incoming_settings.max_concurrent_streams = Some(setting.get_value());
                 },
                 &settings::SettingName::SettingsInitialWindowSize => {
-                    unimplemented!();
+                    let val = setting.get_value();
+
+                    if val <= settings::MAXIMUM_FLOW_CONTROL_WINDOW_SIZE {
+                        self.incoming_settings.initial_window_size = val;
+
+                        // This is the window size that new streams will use.
+
+                        // TODO this also affects some existing streams, see (6.9.2) and (6.9.3)
+                    }
+                    else {
+                        // (6.5.2) Values above the maximum flow-control window size of 231-1 MUST be treated as a 
+                        // connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR.
+                        self.push_send_go_away_frame(
+                            error::HttpError::ConnectionError(
+                                error::ErrorCode::ProtocolError,
+                                error::ErrorName::InvalidInitialWindowSize
+                            )
+                        );
+                    }
                 },
                 &settings::SettingName::SettingsMaxFrameSize => {
                     let val = setting.get_value();
 
                     if settings::INITIAL_MAX_FRAME_SIZE <= val && val <= settings::MAXIMUM_MAX_FRAME_SIZE {
+                        // TODO if a frame payload which is too big to send with the current limit then it is necessary to block
+                        // locally. Hopefully the remote will receive the response headers and realise the need to increase this 
+                        // setting value, at which point we need to trigger and event to check all responses blocked for this reason.
+                        // TODO handle the local side of the above, if we can't receive a payload make a decision about whether
+                        // to increase this setting to allow the remote to send its payload.
                         self.incoming_settings.max_frame_size = val;
                     }
                     else {
@@ -370,7 +393,8 @@ impl<'a> Connection<'a> {
                     }
                 },
                 &settings::SettingName::SettingsMaxHeaderListSize => {
-                    unimplemented!();
+                    // TODO no idea how to handle exceeding this limit on send.
+                    self.incoming_settings.max_header_list_size = Some(setting.get_value());
                 }
             }
         }

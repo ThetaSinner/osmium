@@ -18,6 +18,9 @@
 pub const INITIAL_MAX_FRAME_SIZE: u32 = 0x4000;
 pub const MAXIMUM_MAX_FRAME_SIZE: u32 = 0xFFFFFF;
 
+pub const INITIAL_FLOW_CONTROL_WINDOW_SIZE: u32 = 0xFFFF;
+pub const MAXIMUM_FLOW_CONTROL_WINDOW_SIZE: u32 = 0x7FFFFFFF;
+
 #[derive(Debug)]
 pub enum SettingName {
     SettingsHeaderTableSize,
@@ -38,7 +41,7 @@ pub struct SettingsParameter {
 pub struct Settings {
     pub header_table_size: u32,
     pub enable_push: bool,
-    pub max_concurrent_streams: u32,
+    pub max_concurrent_streams: Option<u32>,
     pub initial_window_size: u32,
     pub max_frame_size: u32,
     pub max_header_list_size: Option<u32>
@@ -49,9 +52,9 @@ impl Settings {
         Settings {
             header_table_size: 4096,
             enable_push: true,
-            max_concurrent_streams: 100,
-            initial_window_size: 65535,
-            max_frame_size: 16384,
+            max_concurrent_streams: None,
+            initial_window_size: INITIAL_FLOW_CONTROL_WINDOW_SIZE,
+            max_frame_size: INITIAL_MAX_FRAME_SIZE,
             max_header_list_size: None
         }
     }
