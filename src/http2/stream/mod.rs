@@ -28,6 +28,8 @@ use http2::header;
 use http2::hpack::{context as hpack_context, unpack as hpack_unpack, pack as hpack_pack};
 use shared::server_trait;
 
+// TODO break this file up!
+
 #[derive(Debug)]
 pub struct StreamRequest {
     pub headers: header::Headers,
@@ -771,7 +773,7 @@ impl Stream {
     }
 
     fn try_start_process<T, R, S>(&mut self, app: &T, hpack_send_context: &mut hpack_context::SendContext) 
-        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+        where T: server_trait::OsmiumServer<Request=R, Response=S>,
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
     {
@@ -804,3 +806,15 @@ impl Stream {
         }
     }
 }
+
+pub enum PushError {
+    TooManyActiveStreams
+}
+
+pub trait StreamHandle {
+    fn is_push_enabled() -> bool;
+
+    fn push_promise(&self, request: StreamRequest) -> Option<PushError>;
+}
+
+// TODO impl streamhandle for stream
