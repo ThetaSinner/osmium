@@ -20,6 +20,7 @@ extern crate osmium;
 extern crate pretty_env_logger;
 
 use osmium::http2::{self, net, header, stream as streaming};
+use http2::core::ConnectionHandle;
 use osmium::shared;
 
 struct MyServer;
@@ -60,8 +61,15 @@ impl shared::server_trait::OsmiumServer for MyServer {
     type Request = HttpRequest;
     type Response = HttpResponse;
 
-    fn process(&self, request: Self::Request) -> Self::Response {
+    fn process(&self, request: Self::Request, handle: Box<&ConnectionHandle>) -> Self::Response {
         println!("Got request {:?}", request);
+
+        if handle.is_push_enabled() {
+            println!("push is enabled!");
+        }
+        else {
+            println!("push is disabled");
+        }
 
         let mut headers = header::Headers::new();
         headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(200));

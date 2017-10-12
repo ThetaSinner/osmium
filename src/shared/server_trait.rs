@@ -15,9 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO move this trait
+use http2::core::ConnectionHandle;
+
 pub trait OsmiumServer {
     type Request;
     type Response;
 
-    fn process(&self, request: Self::Request) -> Self::Response;
+    fn process(&self, request: Self::Request, handle: Box<&ConnectionHandle>) -> Self::Response;
 }

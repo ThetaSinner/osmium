@@ -20,6 +20,8 @@ pub mod state;
 // std
 use std::convert;
 use std::mem;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // osmium
 use http2::frame as framing;
@@ -27,6 +29,8 @@ use http2::error;
 use http2::header;
 use http2::hpack::{context as hpack_context, unpack as hpack_unpack, pack as hpack_pack};
 use shared::server_trait;
+use http2::core::ConnectionHandle;
+use http2::core::ConnectionData;
 
 // TODO break this file up!
 
@@ -163,11 +167,13 @@ pub struct Stream {
 
     send_frames: Vec<Vec<u8>>,
 
+    connection_data: Rc<RefCell<ConnectionData>>,
+
     send_window: u32
 }
 
 impl Stream {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: u32, connection_data: Rc<RefCell<ConnectionData>>) -> Self {
         Stream {
             id: id, 
 
@@ -184,6 +190,8 @@ impl Stream {
 
             send_frames: Vec::new(),
 
+            connection_data: connection_data,
+
             send_window: 0
         }
     }
@@ -195,7 +203,7 @@ impl Stream {
         hpack_send_context: &mut hpack_context::SendContext,
         hpack_recv_context: &mut hpack_context::RecvContext,
         app: &T
-    ) -> Option<error::HttpError> 
+    ) -> Option<error::HttpError>
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
@@ -795,7 +803,7 @@ impl Stream {
 
                 trace!("Passing request to the application [{:?}]", new_request);
                 // TODO should the application be allowed to error?
-                let response: StreamResponse = app.process(new_request.into()).into();
+                let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
                 trace!("Got response from the application [{:?}]", response);
 
                 self.send(response.to_frames(hpack_send_context));
@@ -807,14 +815,14 @@ impl Stream {
     }
 }
 
-pub enum PushError {
-    TooManyActiveStreams
+use http2::core::PushError;
+
+impl<'a> ConnectionHandle for &'a mut Stream {
+    fn is_push_enabled(&self) -> bool {
+        self.connection_data.borrow().incoming_settings.enable_push
+    }
+
+    fn push_promise(&self, request: StreamRequest) -> Option<PushError> {
+        unimplemented!();
+    }
 }
-
-pub trait StreamHandle {
-    fn is_push_enabled() -> bool;
-
-    fn push_promise(&self, request: StreamRequest) -> Option<PushError>;
-}
-
-// TODO impl streamhandle for stream
