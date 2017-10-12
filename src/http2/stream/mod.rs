@@ -819,6 +819,7 @@ use http2::core::PushError;
 
 impl<'a> ConnectionHandle for &'a mut Stream {
     fn is_push_enabled(&self) -> bool {
+        // TODO test that updating server push setting while running actually updates this value.
         self.connection_data.borrow().incoming_settings.enable_push
     }
 

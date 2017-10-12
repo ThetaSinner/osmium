@@ -227,6 +227,7 @@ mod tests {
     use http2::header;
     use http2::stream as streaming;
     use shared::{server_trait, server_settings};
+    use http2::core::ConnectionHandle;
 
     struct MyServer;
 
@@ -266,7 +267,7 @@ mod tests {
         type Request = HttpRequest;
         type Response = HttpResponse;
 
-        fn process(&self, request: Self::Request) -> Self::Response {
+        fn process(&self, request: Self::Request, handle: Box<&ConnectionHandle>) -> Self::Response {
             println!("Got request {:?}", request);
 
             let mut headers = header::Headers::new();
