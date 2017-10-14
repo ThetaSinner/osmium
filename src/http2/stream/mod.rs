@@ -22,6 +22,7 @@ use std::convert;
 use std::mem;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 // osmium
 use http2::frame as framing;
@@ -169,6 +170,9 @@ pub struct Stream {
 
     connection_data: Rc<RefCell<ConnectionData>>,
 
+    push_promise_queue: VecDeque<StreamRequest>,
+    push_promise_publish_queue: VecDeque<(u32, StreamRequest)>,
+
     send_window: u32
 }
 
@@ -192,6 +196,9 @@ impl Stream {
 
             connection_data: connection_data,
 
+            push_promise_queue: VecDeque::new(),
+            push_promise_publish_queue: VecDeque::new(),
+
             send_window: 0
         }
     }
@@ -199,7 +206,7 @@ impl Stream {
     // Note that unpacking headers is stateful, and we can only borrow the connection's context mutably once.
     pub fn recv<T, R, S>(
         &mut self, 
-        frame: framing::StreamFrame, 
+        frame: framing::StreamFrame,
         hpack_send_context: &mut hpack_context::SendContext,
         hpack_recv_context: &mut hpack_context::RecvContext,
         app: &T
@@ -770,6 +777,10 @@ impl Stream {
         trace!("Finished sending frames on stream [{:?}]", self.send_frames);
     }
 
+    pub fn fetch_push_promise(&mut self) -> Option<(u32, StreamRequest)> {
+        self.push_promise_publish_queue.pop_back()
+    }
+
     pub fn fetch_send_frames(&mut self) -> Vec<Vec<u8>> {
         self.send_frames.drain(0..).collect()
     }
@@ -806,12 +817,35 @@ impl Stream {
                 let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
                 trace!("Got response from the application [{:?}]", response);
 
+                while let Some(request) = self.push_promise_queue.pop_back() {
+                    let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
+
+                    let promised_stream_identifier = self.connection_data.borrow_mut().get_next_server_created_stream_id();
+                    push_promise_frame.set_promised_stream_identifier(
+                        promised_stream_identifier
+                    );
+                    push_promise_frame.set_header_block_fragment(
+                        hpack_pack::pack(&request.headers, hpack_send_context, true)
+                    );
+
+                    self.push_promise_publish_queue.push_front((promised_stream_identifier, request));
+
+                    self.send(vec![Box::new(push_promise_frame)]);
+                }
+
                 self.send(response.to_frames(hpack_send_context));
             },
             _ => {
                 // Request not fully received, do nothing.
             }
         }
+    }
+
+    fn queue_push_promise(&mut self, request: StreamRequest) -> Option<PushError> {
+        self.push_promise_queue.push_front(request);
+
+        // TODO handle errors.
+        None
     }
 }
 
@@ -823,7 +857,7 @@ impl<'a> ConnectionHandle for &'a mut Stream {
         self.connection_data.borrow().incoming_settings.enable_push
     }
 
-    fn push_promise(&self, request: StreamRequest) -> Option<PushError> {
-        unimplemented!();
+    fn push_promise(&mut self, request: StreamRequest) -> Option<PushError> {
+        self.queue_push_promise(request)
     }
 }

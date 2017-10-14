@@ -35,13 +35,22 @@ use http2::settings;
 
 pub struct ConnectionData {
     pub incoming_settings: settings::Settings,
+    next_server_created_stream_id: u32 // TODO typedef
 }
 
 impl ConnectionData {
     pub fn new() -> Self {
         ConnectionData {
             incoming_settings: settings::Settings::spec_default(),
+            next_server_created_stream_id: 2
         }
+    }
+
+    // TODO This could be named better
+    pub fn get_next_server_created_stream_id(&mut self) -> u32 {
+        let id = self.next_server_created_stream_id;
+        self.next_server_created_stream_id += 2;
+        id
     }
 }
 
@@ -426,5 +435,5 @@ use http2::stream::StreamRequest;
 pub trait ConnectionHandle {
     fn is_push_enabled(&self) -> bool;
 
-    fn push_promise(&self, request: StreamRequest) -> Option<PushError>;
+    fn push_promise(&mut self, request: StreamRequest) -> Option<PushError>;
 }
