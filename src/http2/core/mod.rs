@@ -20,7 +20,7 @@
 mod connection_frame_state;
 
 // std
-use std::collections::{VecDeque, HashMap};
+use std::collections::{VecDeque, hash_map, HashMap};
 use std::convert;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -63,6 +63,8 @@ pub struct Connection<'a> {
 
     streams: HashMap<framing::StreamId, streaming::Stream>,
 
+    promised_streams_queue: VecDeque<framing::StreamId>,
+
     connection_data: Rc<RefCell<ConnectionData>>,
 
     send_window: u32
@@ -76,6 +78,7 @@ impl<'a> Connection<'a> {
             hpack_send_context: hpack_send_context,
             hpack_recv_context: hpack_recv_context,
             streams: HashMap::new(),
+            promised_streams_queue: VecDeque::new(),
             connection_data: Rc::new(RefCell::new(ConnectionData::new())),
             send_window: 0
         }
@@ -161,35 +164,7 @@ impl<'a> Connection<'a> {
                     return;
                 }
 
-                let stream = self.streams
-                    .entry(frame.header.stream_id)
-                    .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_data.clone()));
-
-                let stream_response = stream.recv(
-                    framing::StreamFrame {
-                        // TODO constructor for converting the header.
-                        header: framing::StreamFrameHeader {
-                            length: frame.header.length,
-                            frame_type: frame_type,
-                            flags: frame.header.flags
-                        },
-                        payload: frame.payload
-                    },
-                    &mut self.hpack_send_context,
-                    &mut self.hpack_recv_context,
-                    app
-                );
-
-                // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
-                if let Some(err) = stream_response {
-                    error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
-                }
-
-                // TODO does the stream build its error or does the error frame get built and sent here.
-
-                // Fetch any send frames which have been generated on the stream.
-                self.send_frames.extend(stream.fetch_send_frames());
-                trace!("Finished processing headers on stream [{}]. Frames ready for send [{:?}]", frame.header.stream_id, self.send_frames);
+                self.move_to_stream(frame_type, frame, app);
             },
             framing::FrameType::Data => {
                 if frame.header.stream_id == 0x0 {
@@ -263,39 +238,100 @@ impl<'a> Connection<'a> {
         }
     }
 
-    fn move_to_stream<T, R, S>(&mut self, frame_type: framing::FrameType, frame: framing::Frame, app: &T)
+    pub fn execute_promised<T, R, S>(&mut self, app: &T) -> bool
         where T: server_trait::OsmiumServer<Request=R, Response=S>, 
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
-        let stream = self.streams
-            .entry(frame.header.stream_id)
-            .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_data.clone()));
+        if let Some(promised_stream_id) = self.promised_streams_queue.pop_back() {
+            let mut temp_streams = Vec::new();
+            {
+                let stream = self.streams.entry(promised_stream_id);
 
-        let stream_response = stream.recv(
-            framing::StreamFrame {
-                // TODO constructor for converting the header.
-                header: framing::StreamFrameHeader {
-                    length: frame.header.length,
-                    frame_type: frame_type,
-                    flags: frame.header.flags
+                match stream {
+                    hash_map::Entry::Occupied(mut stream) => {
+                        let stream = stream.get_mut();
+
+                        stream.recv_promised(&mut self.hpack_send_context, app);
+
+                        while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
+                            let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
+
+                            temp_streams.push((promised_stream_id, promise_stream));
+                            self.promised_streams_queue.push_front(promised_stream_id);
+                        }
+
+                        // Fetch any send frames which have been generated on the stream.
+                        self.send_frames.extend(stream.fetch_send_frames());
+                    },
+                    hash_map::Entry::Vacant(_) => {
+                        panic!("expected reserved stream, but nothing was found");
+                    }
+                }
+            }
+            
+            while let Some((promised_stream_id, promised_stream)) = temp_streams.pop() {
+                self.streams.insert(promised_stream_id, promised_stream);
+            }
+            
+            true
+        }
+        else {
+            false
+        }
+    }
+
+    fn move_to_stream<T, R, S>(&mut self, frame_type: framing::FrameType, frame: framing::Frame, app: &T)
+        where T: server_trait::OsmiumServer<Request=R, Response=S>,
+              R: convert::From<streaming::StreamRequest>,
+              S: convert::Into<streaming::StreamResponse>
+    {
+        // TODO this methods is a mess because it needs to borrow self.streams twice. Make it better.
+
+        let mut temp_streams = Vec::new();
+        {
+            let stream = self.streams
+                .entry(frame.header.stream_id)
+                .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_data.clone()));
+
+            let stream_response = stream.recv(
+                framing::StreamFrame {
+                    // TODO constructor for converting the header.
+                    header: framing::StreamFrameHeader {
+                        length: frame.header.length,
+                        frame_type: frame_type,
+                        flags: frame.header.flags
+                    },
+                    payload: frame.payload
                 },
-                payload: frame.payload
-            },
-            &mut self.hpack_send_context,
-            &mut self.hpack_recv_context,
-            app
-        );
+                &mut self.hpack_send_context,
+                &mut self.hpack_recv_context,
+                app
+            );
 
-        // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
-        if let Some(err) = stream_response {
-            error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
+            // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
+            if let Some(err) = stream_response {
+                error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
+            }
+
+            // TODO does the stream build its error or does the error frame get built and sent here.
+
+            // For each push promise, creates a new stream which is in the reserved state and queues that new stream
+            // for processing later.
+            while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
+                let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
+
+                temp_streams.push((promised_stream_id, promise_stream));
+                self.promised_streams_queue.push_front(promised_stream_id);
+            }
+
+            // Fetch any send frames which have been generated on the stream.
+            self.send_frames.extend(stream.fetch_send_frames());
         }
 
-        // TODO does the stream build its error or does the error frame get built and sent here.
-
-        // Fetch any send frames which have been generated on the stream.
-        self.send_frames.extend(stream.fetch_send_frames());
+        while let Some((promised_stream_id, promised_stream)) = temp_streams.pop() {
+            self.streams.insert(promised_stream_id, promised_stream);
+        }
     }
 
     // Queues a frame to be sent.

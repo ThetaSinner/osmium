@@ -171,6 +171,9 @@ pub struct Stream {
     connection_data: Rc<RefCell<ConnectionData>>,
 
     push_promise_queue: VecDeque<StreamRequest>,
+
+    // Because these requests are being generated locally, the remote encoder will never encode them.
+    // Therefore, it is necessary to keep them for use later without decoding.
     push_promise_publish_queue: VecDeque<(u32, StreamRequest)>,
 
     send_window: u32
@@ -201,6 +204,19 @@ impl Stream {
 
             send_window: 0
         }
+    }
+
+    pub fn new_promise(id: u32, connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
+        let mut promised_stream = Stream::new(id, connection_data);
+
+        promised_stream.state_name = if let state::StreamStateName::Idle(ref state) = promised_stream.state_name {
+            state::StreamStateName::ReservedLocal((state, request).into())
+        }
+        else {
+            panic!("guess the dev should have fixed this");
+        };
+
+        promised_stream
     }
 
     // Note that unpacking headers is stateful, and we can only borrow the connection's context mutably once.
@@ -597,6 +613,58 @@ impl Stream {
         opt_err
     }
 
+    pub fn recv_promised<T, R, S>(
+        &mut self,
+        hpack_send_context: &mut hpack_context::SendContext,
+        app: &T
+    ) -> Option<error::HttpError>
+        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+              R: convert::From<StreamRequest>,
+              S: convert::Into<StreamResponse>
+    {
+        let (new_state, new_request) = match self.state_name {
+            state::StreamStateName::ReservedLocal(ref mut state) => {
+                self.started_processing_request = true;
+
+                let mut new_request = StreamRequest::new();
+                mem::swap(&mut state.state.stream_request, &mut new_request);
+
+                (
+                    state::StreamStateName::HalfClosedRemote(state.into()),
+                    new_request
+                )
+            },
+            _ => {
+                panic!("state not handled");
+            }
+        };
+
+        let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
+
+        while let Some(request) = self.push_promise_queue.pop_back() {
+            let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
+
+            let promised_stream_identifier = self.connection_data.borrow_mut().get_next_server_created_stream_id();
+            push_promise_frame.set_promised_stream_identifier(
+                promised_stream_identifier
+            );
+            push_promise_frame.set_header_block_fragment(
+                hpack_pack::pack(&request.headers, hpack_send_context, true)
+            );
+
+            self.push_promise_publish_queue.push_front((promised_stream_identifier, request));
+
+            self.send(vec![Box::new(push_promise_frame)]);
+        }
+
+        self.send(response.to_frames(hpack_send_context));
+
+        self.state_name = new_state;
+
+        // TODO handle errors
+        None
+    }
+
     fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
         let mut temp_send_frames = Vec::new();
 
@@ -817,6 +885,7 @@ impl Stream {
                 let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
                 trace!("Got response from the application [{:?}]", response);
 
+                // TODO this has been duplicated.
                 while let Some(request) = self.push_promise_queue.pop_back() {
                     let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
 

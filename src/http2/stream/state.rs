@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+use http2::stream as streaming;
+
 #[derive(Debug)]
 pub enum StreamStateName {
     Idle(StreamState<StateIdle>),
@@ -32,7 +34,7 @@ pub struct StreamState<S> {
     // machine work.
     // TODO is there a better way to write this code so that this value isn't required.
     #[allow(dead_code)]
-    state: S
+    pub state: S
 }
 
 impl StreamState<StateIdle> {
@@ -47,7 +49,9 @@ impl StreamState<StateIdle> {
 #[derive(Debug)]
 pub struct StateIdle;
 #[derive(Debug)]
-pub struct StateReservedLocal;
+pub struct StateReservedLocal {
+    pub stream_request: streaming::StreamRequest
+}
 #[derive(Debug)]
 pub struct StateReservedRemote;
 #[derive(Debug)]
@@ -69,10 +73,12 @@ impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateOpen> {
     }
 }
 
-impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateReservedLocal> {
-    fn from(_state_wrapper: &StreamState<StateIdle>) -> StreamState<StateReservedLocal> {
+impl<'a> From<(&'a StreamState<StateIdle>, streaming::StreamRequest)> for StreamState<StateReservedLocal> {
+    fn from((_state_wrapper, stream_request): (&StreamState<StateIdle>, streaming::StreamRequest)) -> StreamState<StateReservedLocal> {
         StreamState {
-            state: StateReservedLocal
+            state: StateReservedLocal {
+                stream_request: stream_request
+            }
         }
     }
 }
@@ -85,8 +91,9 @@ impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateReservedRemote> {
     }
 }
 
-impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateHalfClosedRemote> {
-    fn from(_state_wrapper: &StreamState<StateReservedLocal>) -> StreamState<StateHalfClosedRemote> {
+// TODO mutability, see stream recv_promised
+impl<'a> From<&'a mut StreamState<StateReservedLocal>> for StreamState<StateHalfClosedRemote> {
+    fn from(_state_wrapper: &mut StreamState<StateReservedLocal>) -> StreamState<StateHalfClosedRemote> {
         StreamState {
             state: StateHalfClosedRemote
         }
