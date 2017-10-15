@@ -232,6 +232,17 @@ impl<'a> Connection<'a> {
 
                 panic!("will crash; did not expect go away from client");
             },
+            framing::FrameType::ResetStream => {
+                if frame.header.stream_id == 0x0 {
+                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                self.move_to_stream(frame_type, frame, app);
+            }
             _ => {
                 panic!("can't handle that frame type yet {:?}", frame_type);
             }

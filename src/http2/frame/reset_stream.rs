@@ -62,6 +62,7 @@ impl CompressibleHttpFrame for ResetStreamFrameCompressModel {
     }
 }
 
+#[derive(Debug)]
 pub struct ResetStreamFrame {
     error_code: u32
 }
