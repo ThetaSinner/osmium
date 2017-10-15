@@ -196,7 +196,7 @@ impl<T, R, S> Server<T, R, S>
                         inner_handle.spawn(reader_loop);
 
                         let send_loop = frx.fold(writer, |writer, msg| {
-                            println!("will push to network [{:?}]", msg);
+                            trace!("will push to network [{:?}]", msg);
                             tokio_io::write_all(writer, msg)
                                 .map(|(w, _)| {
                                     w
@@ -248,14 +248,23 @@ mod tests {
     #[derive(Debug)]
     struct HttpResponse {
         pub headers: header::Headers,
-        pub body: Option<String>
+        pub body: Option<Vec<u8>>
     }
 
     impl From<streaming::StreamRequest> for HttpRequest {
         fn from(stream_request: streaming::StreamRequest) -> HttpRequest {
+            let body = if stream_request.payload.is_some() {
+                Some(
+                    String::from_utf8(stream_request.payload.unwrap()).unwrap()
+                )
+            }
+            else {
+                None
+            };
+
             HttpRequest {
                 headers: stream_request.headers,
-                body: stream_request.payload
+                body: body
             }
         }
     }
@@ -275,7 +284,7 @@ mod tests {
         type Request = HttpRequest;
         type Response = HttpResponse;
 
-        fn process(&self, request: Self::Request, handle: Box<&ConnectionHandle>) -> Self::Response {
+        fn process(&self, request: Self::Request, handle: Box<&mut ConnectionHandle>) -> Self::Response {
             println!("Got request {:?}", request);
 
             let mut headers = header::Headers::new();
@@ -285,7 +294,7 @@ mod tests {
 
             HttpResponse {
                 headers: headers,
-                body: Some(String::from("<!DOCTYPE html><html><head><title>test</title></head><body><h1>Osmium served me like a beast</h1></body></html>"))
+                body: Some(String::from("<!DOCTYPE html><html><head><title>test</title></head><body><h1>Osmium served me like a beast</h1></body></html>").into_bytes())
             }
         }
     }

@@ -224,14 +224,14 @@ impl<'a> Connection<'a> {
                 let settings_frame = framing::settings::SettingsFrame::new(&frame.header, &mut frame.payload.into_iter());
 
                 self.apply_settings(settings_frame);
-            }
+            },
             framing::FrameType::GoAway => {
                 let go_away_frame = framing::go_away::GoAwayFrame::new(&frame.header, &mut frame.payload.into_iter());
 
                 println!("go away frame received from client {:?}", go_away_frame);
 
                 panic!("will crash; did not expect go away from client");
-            }
+            },
             _ => {
                 panic!("can't handle that frame type yet {:?}", frame_type);
             }
