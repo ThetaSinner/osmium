@@ -409,6 +409,8 @@ impl<'a> Connection<'a> {
                                     error::ErrorName::EnablePushSettingInvalidValue
                                 )
                             );
+                            // As soon as there is a fatal error, stop processing and let the connection shut down.
+                            return;
                         }
                     }
                 },
@@ -437,6 +439,8 @@ impl<'a> Connection<'a> {
                                 error::ErrorName::InvalidInitialWindowSize
                             )
                         );
+                        // As soon as there is a fatal error, stop processing and let the connection shut down.
+                        return;
                     }
                 },
                 &settings::SettingName::SettingsMaxFrameSize => {
@@ -460,6 +464,8 @@ impl<'a> Connection<'a> {
                                 error::ErrorName::InvalidMaxFrameSize
                             )
                         );
+                        // As soon as there is a fatal error, stop processing and let the connection shut down.
+                        return;
                     }
                 },
                 &settings::SettingName::SettingsMaxHeaderListSize => {
@@ -469,7 +475,11 @@ impl<'a> Connection<'a> {
             }
         }
 
-        // TODO acknowledge the settings by sending a setting acknowledge frame.
+        let mut settings_acknowledge = framing::settings::SettingsFrameCompressModel::new();
+        settings_acknowledge.set_acknowledge();
+
+        // TODO const
+        self.push_send_frame(Box::new(settings_acknowledge), 0x0);
     }
 }
 
