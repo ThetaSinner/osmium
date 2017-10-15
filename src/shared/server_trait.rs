@@ -22,5 +22,5 @@ pub trait OsmiumServer {
     type Request;
     type Response;
 
-    fn process(&self, request: Self::Request, handle: Box<&ConnectionHandle>) -> Self::Response;
+    fn process(&self, request: Self::Request, handle: Box<&mut ConnectionHandle>) -> Self::Response;
 }

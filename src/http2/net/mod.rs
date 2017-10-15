@@ -152,7 +152,7 @@ impl<T, R, S> Server<T, R, S>
                                 while connection.execute_promised(&server_instance.app) {
                                     while let Some(response_frame) = connection.pull_frame() {
                                         ftx = ftx.send(response_frame).wait().unwrap();
-                                    }   
+                                    }
                                 }
                             }
                         });

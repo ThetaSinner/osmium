@@ -104,7 +104,7 @@ impl CompressibleHttpFrame for DataFrameCompressModel {
 }
 
 pub struct DataFrame {
-    payload: String,
+    payload: Vec<u8>,
     end_stream: bool
 }
 
@@ -127,13 +127,13 @@ impl DataFrame {
         }
 
         DataFrame {
-            payload: String::from_utf8(payload).unwrap(),
+            payload: payload,
             end_stream: frame_header.flags & FLAG_END_STREAM == FLAG_END_STREAM
         }
     }
 
-    pub fn get_payload(&self) -> &str {
-        &self.payload
+    pub fn get_payload(&self) -> &[u8] {
+        self.payload.as_slice()
     }
 
     pub fn is_end_stream(&self) -> bool {

@@ -91,9 +91,8 @@ impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateReservedRemote> {
     }
 }
 
-// TODO mutability, see stream recv_promised
-impl<'a> From<&'a mut StreamState<StateReservedLocal>> for StreamState<StateHalfClosedRemote> {
-    fn from(_state_wrapper: &mut StreamState<StateReservedLocal>) -> StreamState<StateHalfClosedRemote> {
+impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateHalfClosedRemote> {
+    fn from(_state_wrapper: &StreamState<StateReservedLocal>) -> StreamState<StateHalfClosedRemote> {
         StreamState {
             state: StateHalfClosedRemote
         }

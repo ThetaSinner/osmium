@@ -38,7 +38,7 @@ use http2::core::ConnectionData;
 #[derive(Debug)]
 pub struct StreamRequest {
     pub headers: header::Headers,
-    pub payload: Option<String>,
+    pub payload: Option<Vec<u8>>,
     pub trailer_headers: Option<header::Headers>
 }
 
@@ -46,7 +46,7 @@ pub struct StreamRequest {
 pub struct StreamResponse {
     pub informational_headers: Vec<header::Headers>,
     pub headers: header::Headers,
-    pub payload: Option<String>,
+    pub payload: Option<Vec<u8>>,
     pub trailer_headers: Option<header::Headers>
 }
 
@@ -99,7 +99,7 @@ impl StreamResponse {
 
         if self.payload.is_some() {
             let mut data_frame = framing::data::DataFrameCompressModel::new(false);
-            data_frame.set_payload(self.payload.unwrap().into_bytes());
+            data_frame.set_payload(self.payload.unwrap());
             if self.trailer_headers.is_none() {
                 data_frame.set_end_stream();
             }
@@ -313,7 +313,7 @@ impl Stream {
                         };
 
                         self.request.payload = Some(
-                            data_frame.get_payload().to_owned()
+                            data_frame.get_payload().to_vec()
                         );
 
                         (new_state, None)
@@ -622,44 +622,29 @@ impl Stream {
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
     {
-        let (new_state, new_request) = match self.state_name {
-            state::StreamStateName::ReservedLocal(ref mut state) => {
-                self.started_processing_request = true;
+        // This is normally set when the request has been fully received. In this situation, set it as soon as the 
+        // synthetic request has started to execute.
+        self.started_processing_request = true;
 
+        // Fetch the request from the state machine.
+        let new_request = match self.state_name {
+            state::StreamStateName::ReservedLocal(ref mut state) => {
                 let mut new_request = StreamRequest::new();
                 mem::swap(&mut state.state.stream_request, &mut new_request);
 
-                (
-                    state::StreamStateName::HalfClosedRemote(state.into()),
-                    new_request
-                )
+                new_request
             },
             _ => {
                 panic!("state not handled");
             }
         };
 
-        let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
+        let response: StreamResponse = app.process(new_request.into(), Box::new(self)).into();
 
-        while let Some(request) = self.push_promise_queue.pop_back() {
-            let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
-
-            let promised_stream_identifier = self.connection_data.borrow_mut().get_next_server_created_stream_id();
-            push_promise_frame.set_promised_stream_identifier(
-                promised_stream_identifier
-            );
-            push_promise_frame.set_header_block_fragment(
-                hpack_pack::pack(&request.headers, hpack_send_context, true)
-            );
-
-            self.push_promise_publish_queue.push_front((promised_stream_identifier, request));
-
-            self.send(vec![Box::new(push_promise_frame)]);
-        }
+        // Notice that we do not handle push promise here. That is because promises must be initiated on a peer initiated stream,
+        // which this stream will not be.
 
         self.send(response.to_frames(hpack_send_context));
-
-        self.state_name = new_state;
 
         // TODO handle errors
         None
@@ -671,9 +656,35 @@ impl Stream {
         let mut frame_iter = frames.into_iter();
         while let Some(frame) = frame_iter.next() {
             let new_state = match self.state_name {
-                state::StreamStateName::ReservedLocal(_) => {
-                    // This is a state the server will handle, but it's not implemented yet.
-                    unimplemented!();
+                state::StreamStateName::ReservedLocal(ref state) => {
+                    match frame.get_frame_type() {
+                        framing::FrameType::Headers => {
+                            // (8.2.2) This stream becomes "half-closed" to the client (Section 5.1) after the initial HEADERS frame is sent.
+                            let mut new_state = state::StreamStateName::HalfClosedRemote(state.into());
+
+                            // Sending end stream is a seperate event, so if it is set, then we can have a second state transition here.
+                            if framing::headers::is_end_stream(frame.get_flags()) {
+                                new_state = match new_state {
+                                    state::StreamStateName::HalfClosedRemote(ref state) => {
+                                        state::StreamStateName::Closed(state.into())
+                                    },
+                                    _ => {
+                                        unreachable!();
+                                    }
+                                };
+                            }
+
+                            temp_send_frames.push(
+                                framing::compress_frame(frame, self.id)
+                            );
+                            
+                            Some(new_state)
+                        },
+                        _ => {
+                            // TODO what else can be sent here? it really should only be headers.
+                            unimplemented!();
+                        }
+                    }
                 },
                 state::StreamStateName::Open(ref state) => {
                     match frame.get_frame_type() {
@@ -882,7 +893,7 @@ impl Stream {
 
                 trace!("Passing request to the application [{:?}]", new_request);
                 // TODO should the application be allowed to error?
-                let response: StreamResponse = app.process(new_request.into(), Box::new(&self)).into();
+                let response: StreamResponse = app.process(new_request.into(), Box::new(self)).into();
                 trace!("Got response from the application [{:?}]", response);
 
                 // TODO this has been duplicated.
@@ -920,8 +931,9 @@ impl Stream {
 
 use http2::core::PushError;
 
-impl<'a> ConnectionHandle for &'a mut Stream {
+impl ConnectionHandle for Stream {
     fn is_push_enabled(&self) -> bool {
+        // TODO modify the stream to understand that it is a synthetic stream, and do not allow promises to be sent in that case.
         // TODO test that updating server push setting while running actually updates this value.
         self.connection_data.borrow().incoming_settings.enable_push
     }
