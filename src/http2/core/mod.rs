@@ -223,7 +223,12 @@ impl<'a> Connection<'a> {
 
                 let settings_frame = framing::settings::SettingsFrame::new(&frame.header, &mut frame.payload.into_iter());
 
-                self.apply_settings(settings_frame);
+                if settings_frame.is_acknowledge() {
+                    // TODO handle ack received
+                }
+                else {
+                    self.apply_settings(settings_frame);
+                }
             },
             framing::FrameType::GoAway => {
                 let go_away_frame = framing::go_away::GoAwayFrame::new(&frame.header, &mut frame.payload.into_iter());

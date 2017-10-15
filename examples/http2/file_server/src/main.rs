@@ -106,6 +106,7 @@ fn handle_index(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
 
         let mut headers = header::Headers::new();
         headers.push(header::HeaderName::PseudoMethod, header::HeaderValue::Str(String::from("GET")));
+        headers.push(header::HeaderName::PseudoAuthority, header::HeaderValue::Str(String::from("localhost:8080")));
         headers.push(header::HeaderName::PseudoScheme, header::HeaderValue::Str(String::from("https")));
         headers.push(header::HeaderName::PseudoPath, header::HeaderValue::Str(String::from("/cractal_hexagon_geometric_small.jpg")));
 
