@@ -598,8 +598,6 @@ impl Stream {
             }
         };
 
-        println!("where's the stream at? {:?}", self.request);
-
         if let Some(new_state) = opt_new_state {
             self.state_name = new_state;
         }
@@ -655,6 +653,8 @@ impl Stream {
 
         let mut frame_iter = frames.into_iter();
         while let Some(frame) = frame_iter.next() {
+            log_stream_send_frame!("Stream send", self.id, frame);
+
             let new_state = match self.state_name {
                 state::StreamStateName::ReservedLocal(ref state) => {
                     match frame.get_frame_type() {

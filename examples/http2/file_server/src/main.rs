@@ -18,12 +18,15 @@
 extern crate osmium;
 #[macro_use] extern crate log;
 extern crate pretty_env_logger;
+extern crate chrono;
 
 use std::fs::File;
 use std::io::prelude::*;
 use osmium::http2::{self, net, header, stream as streaming};
 use http2::core::ConnectionHandle;
 use osmium::shared;
+use chrono::{DateTime, TimeZone, NaiveDateTime, Utc, Local};
+use chrono::prelude::*;
 
 struct MyServer;
 
@@ -71,8 +74,6 @@ impl shared::server_trait::OsmiumServer for MyServer {
     type Response = HttpResponse;
 
     fn process(&self, request: Self::Request, handle: Box<&mut ConnectionHandle>) -> Self::Response {
-        println!("Got request {:?}", request);
-
         for header in request.headers.iter() {
             if header.name == header::HeaderName::PseudoPath {
                 match header.value {
@@ -85,12 +86,36 @@ impl shared::server_trait::OsmiumServer for MyServer {
                                 return handle_img(handle);
                             },
                             _ => {
-                                panic!("can't handle that");
+                                let mut headers = header::Headers::new();
+                                headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(404));
+                                headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
+
+                                let t = chrono::Local::now();
+                                headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+                                    format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+                                ));
+
+                                return HttpResponse {
+                                    headers: headers,
+                                    body: None
+                                };
                             }
                         }
                     },
                     _ => {
-                        panic!("can't handle that!");
+                        let mut headers = header::Headers::new();
+                        headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(404));
+                        headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
+
+                        let t = chrono::Local::now();
+                        headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+                            format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+                        ));
+
+                        return HttpResponse {
+                            headers: headers,
+                            body: None
+                        };
                     }
                 }
             }
@@ -108,7 +133,7 @@ fn handle_index(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
         headers.push(header::HeaderName::PseudoMethod, header::HeaderValue::Str(String::from("GET")));
         headers.push(header::HeaderName::PseudoAuthority, header::HeaderValue::Str(String::from("localhost:8080")));
         headers.push(header::HeaderName::PseudoScheme, header::HeaderValue::Str(String::from("https")));
-        headers.push(header::HeaderName::PseudoPath, header::HeaderValue::Str(String::from("/cractal_hexagon_geometric_small.jpg")));
+        headers.push(header::HeaderName::PseudoPath, header::HeaderValue::Str(String::from("/cractal_hexagon_geometric_small.jpg")));let t = chrono::Local::now();
 
         let request = streaming::StreamRequest {
             headers: headers,
@@ -127,6 +152,11 @@ fn handle_index(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
     headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(161));
     headers.push(header::HeaderName::ContentType, header::HeaderValue::Str(String::from("text/html")));
 
+    let t = chrono::Local::now();
+    headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+        format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+    ));
+
     HttpResponse {
         headers: headers,
         body: Some(String::from("<!DOCTYPE html><html><head><title>test</title></head><body><h1>Osmium served me like a beast</h1><img src=\"/cractal_hexagon_geometric_small.jpg\" /></body></html>").into_bytes())
@@ -143,6 +173,11 @@ fn handle_img(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
     headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(200));
     headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(contents.len() as i32));
     headers.push(header::HeaderName::ContentType, header::HeaderValue::Str(String::from("image/jpeg")));
+
+    let t = chrono::Local::now();
+    headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+        format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+    ));
 
     HttpResponse {
         headers: headers,

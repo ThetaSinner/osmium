@@ -120,9 +120,6 @@ impl<T, R, S> Server<T, R, S>
                 
                 match handshake_result {
                     Ok(handshake_completion) => {
-                        println!("handshake completed, start http/2 connection");
-                        println!("{:?}", handshake_completion.settings_frame);
-
                         let (reader, writer) = handshake_completion.stream.split();
 
                         let (mut ftx, frx) = futures_mpsc::channel(5);

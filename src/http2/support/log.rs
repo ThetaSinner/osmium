@@ -56,3 +56,18 @@ macro_rules! log_stream_post_recv {
         }
     };
 }
+
+#[macro_export]
+macro_rules! log_stream_send_frame {
+    ( $msg:expr, $id:expr, $frame:expr ) => {
+        #[cfg(feature = "osmium_support")]
+        {
+            if $frame.get_length() < 100 {
+                debug!("(stream) {}: {}, {:?}", $msg, $id, $frame);
+            }
+            else {
+                debug!("(stream) {}: {}, [type {:?}] [flags {:?}] (payload too long to print)", $msg, $id, $frame.get_frame_type(), $frame.get_flags());
+            }
+        }
+    };
+}
