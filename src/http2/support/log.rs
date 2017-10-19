@@ -71,3 +71,13 @@ macro_rules! log_stream_send_frame {
         }
     };
 }
+
+#[macro_export]
+macro_rules! log_compressed_frame {
+    ( $msg:expr, $compressed_frame:expr ) => {
+        #[cfg(feature = "osmium_support")]
+        {
+            trace!("{}: {:?}", $msg, $compressed_frame);
+        }
+    };
+}

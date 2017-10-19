@@ -651,6 +651,8 @@ impl Stream {
     fn send(&mut self, frames: Vec<Box<framing::CompressibleHttpFrame>>) {
         let mut temp_send_frames = Vec::new();
 
+        // TODO handle not sending if max frame size setting will be exceeded.
+
         let mut frame_iter = frames.into_iter();
         while let Some(frame) = frame_iter.next() {
             log_stream_send_frame!("Stream send", self.id, frame);

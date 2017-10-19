@@ -164,7 +164,7 @@ fn handle_index(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
 }
 
 fn handle_img(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
-    let mut f = File::open("./cractal_hexagon_geometric.jpg").expect("image file not found");
+    let mut f = File::open("./cractal_hexagon_geometric_small.jpg").expect("image file not found");
 
     let mut contents = Vec::new();
     f.read_to_end(&mut contents).expect("something went wrong reading the file");

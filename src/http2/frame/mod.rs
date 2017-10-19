@@ -144,6 +144,8 @@ pub fn compress_frame(frame: Box<CompressibleHttpFrame>, stream_id: StreamId) ->
 
     result.extend(frame.get_payload());
 
+    log_compressed_frame!("Compressed frame", result);
+
     result
 }
 
