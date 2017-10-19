@@ -192,7 +192,7 @@ fn main() {
 
     let mut settings = shared::server_settings::ServerSettings::default();
     let mut security = shared::server_settings::SecuritySettings::default();
-    security.set_ssl_cert_path(String::from("../../../tests/certificate.pfx"));
+    security.set_ssl_cert_path(String::from("../../../tests/cert.pfx"));
     settings.set_security(security);
 
     let handshake = net::https::HttpsH2Handshake::new();

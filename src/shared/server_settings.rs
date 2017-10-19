@@ -31,7 +31,7 @@ pub struct SecuritySettings {
 impl SecuritySettings {
     pub fn default() -> Self {
         SecuritySettings {
-            ssl_cert_path: String::from("tests/certificate.pfx"),
+            ssl_cert_path: String::from("tests/cert.pfx"),
             ssl_cert_pass: String::from("asdf")
         }
     }
