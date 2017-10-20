@@ -17,6 +17,7 @@ pub struct ServerSettings {
     host: String,
     port: u16,
     security: Option<SecuritySettings>,
+    // TODO read these settings on connection start.
     http2_settings: Option<Vec<http2_settings::SettingsParameter>>
 }
 

@@ -33,6 +33,7 @@ use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
 
+// TODO rename this
 pub struct ConnectionData {
     pub incoming_settings: settings::Settings,
     next_server_created_stream_id: u32 // TODO typedef
@@ -235,6 +236,7 @@ impl<'a> Connection<'a> {
 
                 println!("go away frame received from client {:?}", go_away_frame);
 
+                // TODO handle connection shutdown.
                 panic!("will crash; did not expect go away from client");
             },
             framing::FrameType::ResetStream => {

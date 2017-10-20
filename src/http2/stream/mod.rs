@@ -16,6 +16,11 @@
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 pub mod state;
+pub mod stream_request;
+pub mod stream_response;
+
+pub use self::stream_request::StreamRequest;
+pub use self::stream_response::StreamResponse;
 
 // std
 use std::convert;
@@ -28,133 +33,14 @@ use std::collections::VecDeque;
 use http2::frame as framing;
 use http2::error;
 use http2::header;
-use http2::hpack::{context as hpack_context, unpack as hpack_unpack, pack as hpack_pack};
+use http2::hpack::{context as hpack_context, pack as hpack_pack};
 use shared::server_trait;
 use http2::core::ConnectionHandle;
 use http2::core::ConnectionData;
 
 // TODO break this file up!
 
-#[derive(Debug)]
-pub struct StreamRequest {
-    pub headers: header::Headers,
-    pub payload: Option<Vec<u8>>,
-    pub trailer_headers: Option<header::Headers>
-}
-
-#[derive(Debug)]
-pub struct StreamResponse {
-    pub informational_headers: Vec<header::Headers>,
-    pub headers: header::Headers,
-    pub payload: Option<Vec<u8>>,
-    pub trailer_headers: Option<header::Headers>
-}
-
-impl StreamRequest {
-    pub fn new() -> Self {
-        StreamRequest {
-            headers: header::Headers::new(),
-            payload: None,
-            trailer_headers: None
-        }
-    }
-
-    // TODO will return an error.
-    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_recv_context: &mut hpack_context::RecvContext) {
-        let decoded = hpack_unpack::unpack(temp_header_block, hpack_recv_context);
-
-        // TODO can the header block be empty? because that will break the logic below.
-
-        if self.headers.is_empty() {
-            // If no request headers have been received then these are the request headers.
-            self.headers = decoded.headers;
-        }
-        else if self.trailer_headers.is_none() {
-            // If no trailer headers have been received then these are the tailer headers.
-            self.trailer_headers = Some(decoded.headers);
-        }
-        else {
-            // TODO handle error. We have received all the header blocks we were expecting, but received
-            // a request to process another.
-            panic!("unexpected header block");
-        }
-    }
-}
-
-impl StreamResponse {
-    pub fn to_frames(self, hpack_send_context: &mut hpack_context::SendContext) -> Vec<Box<framing::CompressibleHttpFrame>>
-    {
-        trace!("Starting to convert stream response to frames [{:?}]", self);
-
-        let mut frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
-
-        for informational_header in &self.informational_headers {
-            frames.extend(
-                StreamResponse::headers_to_frames(informational_header, hpack_send_context, false)
-            );
-        }
-
-        let headers = StreamResponse::headers_to_frames(&self.headers, hpack_send_context, self.payload.is_none() && self.trailer_headers.is_none());
-        frames.extend(headers);
-
-        if self.payload.is_some() {
-            let mut data_frame = framing::data::DataFrameCompressModel::new(false);
-            data_frame.set_payload(self.payload.unwrap());
-            if self.trailer_headers.is_none() {
-                data_frame.set_end_stream();
-            }
-            frames.push(Box::new(data_frame));
-        }
-
-        if self.trailer_headers.is_some() {
-            let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_send_context, true);
-            frames.extend(trailer_headers_frame);
-        }
-
-        trace!("Converted to frames [{:?}]", frames);
-
-        frames
-    }
-
-    fn headers_to_frames(headers: &header::Headers, hpack_send_context: &mut hpack_context::SendContext, end_stream: bool) -> Vec<Box<framing::CompressibleHttpFrame>>
-    {
-        let mut temp_frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
-
-        let packed = hpack_pack::pack(&headers, hpack_send_context, true);
-        let num_chunks = ((packed.len() as f32) / 150f32).ceil() as i32;
-        let mut chunk_count = 1;
-        let mut chunks = packed.chunks(150);
-
-        if let Some(first_chunk) = chunks.next() {
-            let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
-            if end_stream {
-                headers_frame.set_end_stream();
-            }
-            if num_chunks == 1 {
-                headers_frame.set_end_headers();
-            }
-            headers_frame.set_header_block_fragment(first_chunk.to_vec());
-            temp_frames.push(Box::new(headers_frame));
-        }
-        else {
-            panic!("empty headers block");
-        }
-        
-        while let Some(chunk) = chunks.next() {
-            let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
-            headers_frame.set_header_block_fragment(chunk.to_vec());
-
-            chunk_count += 1;
-            if chunk_count == num_chunks {
-                headers_frame.set_end_headers();
-            }
-
-            temp_frames.push(Box::new(headers_frame));
-        }
-
-        temp_frames
-    }
-}
+// TODO can/should any of this data be moved into the state machine?
 
 pub struct Stream {
     id: u32,
