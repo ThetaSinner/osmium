@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-use http2::frame as framing;
-
 #[macro_export]
 macro_rules! log_conn_frame {
     ( $msg:expr, $frame:expr ) => {

@@ -18,20 +18,8 @@
 use openssl::pkcs12::Pkcs12;
 use openssl::ssl::{SslMethod, SslAcceptor, SslAcceptorBuilder};
 use std::fs::File;
-use std::io::{Read, Write};
-use std::io;
-use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::thread;
-use futures::Stream;
+use std::io::Read;
 
-use std::sync::mpsc;
-use bytes::BufMut;
-use futures::Poll;
-use futures::Future;
-use futures::sync::mpsc as futures_mpsc;
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_openssl::{SslStream, SslAcceptorExt};
 use shared::server_settings::SecuritySettings;
 
 const ALPN_PROTOCOLS: &[&[u8]] = &[&[0x68, 0x32]];

@@ -74,7 +74,7 @@ impl h2handshake::H2Handshake for HttpsH2Handshake {
                             // TODO need to check frame type and stream id
                             let settings_frame = framing::settings::SettingsFrame::new(&frame_header, &mut buf.to_vec().into_iter());
 
-                            let mut response = framing::compress_frame(settings_response, 0x0);
+                            let response = framing::compress_frame(settings_response, 0x0);
                             future::ok(settings_frame)
                             .join(
                                 tokio_io::io::write_all(stream, response)

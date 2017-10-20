@@ -11,9 +11,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO the http module has its own settings. If that gets merged into the newer net code then
-// that should be removed and this should be used.
-
 use http2::settings as http2_settings;
 
 pub struct ServerSettings {

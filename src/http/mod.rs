@@ -1,7 +1,3 @@
-// Copyright 2017 ThetaSinner
-//
-// This file is part of Osmium.
-
 // Osmium is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -14,11 +10,3 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
-
-pub mod request;
-pub mod response;
-pub mod header;
-pub mod handler;
-pub mod server;
-pub mod status;
-mod net;
