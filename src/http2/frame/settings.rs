@@ -107,7 +107,23 @@ pub struct SettingsFrame {
 }
 
 impl SettingsFrame {
+    pub fn new_acknowledge() -> Self {
+        SettingsFrame {
+            acknowledge: true,
+            // TODO is this equivalent to empty?
+            parameters: Vec::with_capacity(0)
+        }
+    }
+
+    pub fn new_noop() -> Self {
+        SettingsFrame {
+            acknowledge: false,
+            parameters: Vec::with_capacity(0)
+        }
+    }
+
     pub fn new(frame_header: &super::FrameHeader, frame: &mut IntoIter<u8>) -> Self {
+        // TODO remove this in favour of the above
         if frame_header.flags & FLAG_ACK == FLAG_ACK {
             // TODO handle error
             assert_eq!(0, frame_header.length);

@@ -24,6 +24,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::rc::Rc;
 use std::marker;
+use std::mem;
 
 // tokio
 use futures::{Stream, Sink, Future, stream};
@@ -119,15 +120,19 @@ impl<T, R, S> Server<T, R, S>
                 .wait(); // safe to wait here as long as the handshake result is a future result.
                 
                 match handshake_result {
-                    Ok(handshake_completion) => {
+                    Ok(mut handshake_completion) => {
+                        let mut temp_frame = framing::settings::SettingsFrame::new_noop();
+                        mem::swap(&mut handshake_completion.settings_frame, &mut temp_frame);
+                        
                         let (reader, writer) = handshake_completion.stream.split();
 
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
                             let mut connection = core::Connection::new(
-                                server_instance.hpack.new_send_context(), 
-                                server_instance.hpack.new_recv_context()
+                                server_instance.hpack.new_send_context(),
+                                server_instance.hpack.new_recv_context(),
+                                temp_frame
                             );
 
                             let mut msg_iter = rx.iter();

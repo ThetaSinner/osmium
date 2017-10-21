@@ -111,7 +111,8 @@ pub enum ErrorName {
     ZeroWindowSizeIncrement,
     EnablePushSettingInvalidValue,
     InvalidMaxFrameSize,
-    InvalidInitialWindowSize
+    InvalidInitialWindowSize,
+    ConnectionFlowControlWindowNotRespected
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -158,6 +159,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::InvalidInitialWindowSize => {
                 "invalid initial window size"
+            },
+            ErrorName::ConnectionFlowControlWindowNotRespected => {
+                "connection flow control window not respected"
             }
         }.to_owned().as_bytes().to_vec()
     }

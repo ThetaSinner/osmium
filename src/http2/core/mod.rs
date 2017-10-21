@@ -18,6 +18,7 @@
 // TODO rename this module to connection or similar.
 
 mod connection_frame_state;
+mod flow_control;
 
 // std
 use std::collections::{VecDeque, hash_map, HashMap};
@@ -68,12 +69,13 @@ pub struct Connection<'a> {
 
     connection_data: Rc<RefCell<ConnectionData>>,
 
-    send_window: u32
+    send_window: u32,
+    receive_window: u32
 }
 
 impl<'a> Connection<'a> {
-    pub fn new(hpack_send_context: hpack_context::SendContext<'a>, hpack_recv_context: hpack_context::RecvContext<'a>) -> Connection<'a> {
-        Connection {
+    pub fn new(hpack_send_context: hpack_context::SendContext<'a>, hpack_recv_context: hpack_context::RecvContext<'a>, initial_settings: framing::settings::SettingsFrame) -> Connection<'a> {
+        let mut new_con = Connection {
             send_frames: VecDeque::new(),
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
             hpack_send_context: hpack_send_context,
@@ -81,12 +83,19 @@ impl<'a> Connection<'a> {
             streams: HashMap::new(),
             promised_streams_queue: VecDeque::new(),
             connection_data: Rc::new(RefCell::new(ConnectionData::new())),
-            send_window: 0
-        }
+            send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
+            receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
+        };
+
+        // TODO this might queue a go_away, the net code needs to check the startup was okay and close the connection otherwise.
+        new_con.apply_settings(initial_settings, false);
+
+        new_con
     }
 
+    // TODO rename to recv.
     pub fn push_frame<T, R, S>(&mut self, frame: framing::Frame, app: &T)
-        where T: server_trait::OsmiumServer<Request=R, Response=S>, 
+        where T: server_trait::OsmiumServer<Request=R, Response=S>,
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
@@ -176,6 +185,7 @@ impl<'a> Connection<'a> {
                     return;
                 }
 
+                self.handle_flow_control_for_recv(frame.header.length);
                 self.move_to_stream(frame_type, frame, app);
             },
             framing::FrameType::WindowUpdate => {
@@ -228,7 +238,7 @@ impl<'a> Connection<'a> {
                     // TODO handle ack received
                 }
                 else {
-                    self.apply_settings(settings_frame);
+                    self.apply_settings(settings_frame, true);
                 }
             },
             framing::FrameType::GoAway => {
@@ -362,6 +372,8 @@ impl<'a> Connection<'a> {
     }
 
     fn push_send_go_away_frame(&mut self, http_error: error::HttpError) {
+        // TODO handle close connection after this is queued.
+
         // TODO send last stream processed. Steams are not implemented yet so this will have to wait. For now send
         // 0x0, which means no streams processed.
         let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
@@ -375,7 +387,7 @@ impl<'a> Connection<'a> {
         self.send_frames.pop_front()
     }
 
-    fn apply_settings(&mut self, settings_frame: framing::settings::SettingsFrame) {
+    fn apply_settings(&mut self, settings_frame: framing::settings::SettingsFrame, send_acknowledge: bool) {
         for setting in settings_frame.get_parameters() {
             match setting.get_name() {
                 &settings::SettingName::SettingsHeaderTableSize => {
@@ -482,11 +494,34 @@ impl<'a> Connection<'a> {
             }
         }
 
-        let mut settings_acknowledge = framing::settings::SettingsFrameCompressModel::new();
-        settings_acknowledge.set_acknowledge();
+        // TODO break this function down so that the logic isn't required.
+        if send_acknowledge {
+            let mut settings_acknowledge = framing::settings::SettingsFrameCompressModel::new();
+            settings_acknowledge.set_acknowledge();
 
-        // TODO const
-        self.push_send_frame(Box::new(settings_acknowledge), 0x0);
+            // TODO const
+            self.push_send_frame(Box::new(settings_acknowledge), 0x0);
+        }
+    }
+
+    fn handle_flow_control_for_recv(&mut self, size: u32) {
+        // Check if the sender was allowed to send a payload this size.
+        if size > self.receive_window {
+            self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                error::ErrorCode::FlowControlError,
+                error::ErrorName::ConnectionFlowControlWindowNotRespected
+            ));
+            return;
+        }
+
+        // Update the receive window size.
+        self.receive_window -= size;
+
+        let update_amount = flow_control::get_window_update_amount(self.receive_window);
+        if update_amount > 0 {
+            let window_update_frame = framing::window_update::WindowUpdateFrameCompressModel::new(update_amount);
+            self.push_send_frame(Box::new(window_update_frame), 0x0);
+        }
     }
 }
 
