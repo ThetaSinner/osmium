@@ -42,9 +42,10 @@ use http2::core::ConnectionData;
 
 // TODO can/should any of this data be moved into the state machine?
 
-pub struct Stream {
-    id: u32,
+// TODO it is possible to send multiple data frames, it is necessary to make use of this to avoid
+// sending payloads larger than the allowed size.
 
+pub struct Stream {
     state_name: state::StreamStateName,
 
     temp_header_block: Vec<u8>,
@@ -52,7 +53,7 @@ pub struct Stream {
     request: StreamRequest,
     started_processing_request: bool,
 
-    send_frames: Vec<Vec<u8>>,
+    send_frames: Vec<Box<framing::CompressibleHttpFrame>>,
 
     connection_data: Rc<RefCell<ConnectionData>>,
 
@@ -63,13 +64,12 @@ pub struct Stream {
     push_promise_publish_queue: VecDeque<(u32, StreamRequest)>,
 
     send_window: u32
+    // TODO receive
 }
 
 impl Stream {
-    pub fn new(id: u32, connection_data: Rc<RefCell<ConnectionData>>) -> Self {
+    pub fn new(connection_data: Rc<RefCell<ConnectionData>>) -> Self {
         Stream {
-            id: id, 
-
             state_name: state::StreamStateName::Idle(state::StreamState::<state::StateIdle>::new()),
 
             temp_header_block: Vec::new(),
@@ -92,8 +92,8 @@ impl Stream {
         }
     }
 
-    pub fn new_promise(id: u32, connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
-        let mut promised_stream = Stream::new(id, connection_data);
+    pub fn new_promise(connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
+        let mut promised_stream = Stream::new(connection_data);
 
         promised_stream.state_name = if let state::StreamStateName::Idle(ref state) = promised_stream.state_name {
             state::StreamStateName::ReservedLocal((state, request).into())
@@ -562,9 +562,7 @@ impl Stream {
                                 };
                             }
 
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
                             
                             Some(new_state)
                         },
@@ -586,9 +584,7 @@ impl Stream {
                                 None
                             };
 
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
                             
                             new_state
                         },
@@ -602,46 +598,29 @@ impl Stream {
                                 None
                             };
 
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
                             
                             new_state
                         },
                         framing::FrameType::ResetStream => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             Some(state::StreamStateName::Closed(state.into()))
                         },
                         framing::FrameType::PushPromise => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             None
                         },
                         framing::FrameType::WindowUpdate => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             None
                         },
                         framing::FrameType::Continuation => {
-                            // The continuation frames are appended to form a block of frames. The header and continuation
-                            // frames must be sent with no frames from this or other streams interleaved. The simplest way
-                            // to achieve this is to clump them together. There seems to be no advantage to leaving them
-                            // as seperate frames and trying to coordinate this later.
-                            if let Some(ref mut last_frame) = temp_send_frames.last_mut() {
-                                last_frame.extend(
-                                    framing::compress_frame(frame, self.id)
-                                );
-                            }
-                            else {
-                                panic!("continuation with no preceeding frame to send");
-                            }
+                            // It would be nice to check that this continuation is a valid frame to be sending. But it's
+                            // just not worth doing - the server must construct sequences of frames correctly.
+                            temp_send_frames.push(frame);
 
                             None
                         },
@@ -663,9 +642,7 @@ impl Stream {
                                 None
                             };
 
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
                             
                             new_state
                         },
@@ -679,46 +656,29 @@ impl Stream {
                                 None
                             };
 
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
                             
                             new_state
                         },
                         framing::FrameType::ResetStream => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             Some(state::StreamStateName::Closed(state.into()))
                         },
                         framing::FrameType::PushPromise => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             None
                         },
                         framing::FrameType::WindowUpdate => {
-                            temp_send_frames.push(
-                                framing::compress_frame(frame, self.id)
-                            );
+                            temp_send_frames.push(frame);
 
                             None
                         },
                         framing::FrameType::Continuation => {
-                            // The continuation frames are appended to form a block of frames. The header and continuation
-                            // frames must be sent with no frames from this or other streams interleaved. The simplest way
-                            // to achieve this is to clump them together. There seems to be no advantage to leaving them
-                            // as seperate frames and trying to coordinate this later.
-                            if let Some(ref mut last_frame) = temp_send_frames.last_mut() {
-                                last_frame.extend(
-                                    framing::compress_frame(frame, self.id)
-                                );
-                            }
-                            else {
-                                panic!("continuation with no preceeding frame to send");
-                            }
+                            // It would be nice to check that this continuation is a valid frame to be sending. But it's
+                            // just not worth doing - the server must construct sequences of frames correctly.
+                            temp_send_frames.push(frame);
 
                             None
                         },
@@ -748,7 +708,7 @@ impl Stream {
         self.push_promise_publish_queue.pop_back()
     }
 
-    pub fn fetch_send_frames(&mut self) -> Vec<Vec<u8>> {
+    pub fn fetch_send_frames(&mut self) -> Vec<Box<framing::CompressibleHttpFrame>> {
         self.send_frames.drain(0..).collect()
     }
 

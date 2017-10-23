@@ -64,6 +64,8 @@ pub struct Connection<'a> {
     hpack_recv_context: hpack_context::RecvContext<'a>,
 
     streams: HashMap<framing::StreamId, streaming::Stream>,
+    // TODO the hashmap is nice for the usage pattern, but doesn't represent order in which streams should be unblocked.
+    blocked_streams: HashMap<framing::StreamId, VecDeque<Box<framing::CompressibleHttpFrame>>>,
 
     promised_streams_queue: VecDeque<framing::StreamId>,
 
@@ -81,6 +83,7 @@ impl<'a> Connection<'a> {
             hpack_send_context: hpack_send_context,
             hpack_recv_context: hpack_recv_context,
             streams: HashMap::new(),
+            blocked_streams: HashMap::new(),
             promised_streams_queue: VecDeque::new(),
             connection_data: Rc::new(RefCell::new(ConnectionData::new())),
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
@@ -283,14 +286,80 @@ impl<'a> Connection<'a> {
                         stream.recv_promised(&mut self.hpack_send_context, app);
 
                         while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
-                            let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
+                            let promise_stream = streaming::Stream::new_promise(self.connection_data.clone(), stream_request);
 
                             temp_streams.push((promised_stream_id, promise_stream));
                             self.promised_streams_queue.push_front(promised_stream_id);
                         }
 
+                        // TODO duplicated code
                         // Fetch any send frames which have been generated on the stream.
-                        self.send_frames.extend(stream.fetch_send_frames());
+                        // TODO why does this need a reference?
+                        let mut is_blocked = self.blocked_streams.contains_key(&promised_stream_id);
+                        let stream_frames = stream.fetch_send_frames();
+                        // TODO doesn't need to peek any more
+                        let mut stream_frame_iter = stream_frames.into_iter().peekable();
+                        while let Some(frame) = stream_frame_iter.next() {
+                            match frame.get_frame_type() {
+                                framing::FrameType::Data => {
+                                    if is_blocked {
+                                        // TODO duplicate block
+                                        match self.blocked_streams.entry(promised_stream_id) {
+                                            hash_map::Entry::Occupied(mut entry) => {
+                                                entry.get_mut().push_front(frame);
+                                            },
+                                            _ => {
+                                                // TODO there must be a better way to do this. Existence of the entry has been checked.
+                                                panic!("expected map entry but was not found");
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        // TODO which is the correct type? because it is a size, it really should be unsigned.
+                                        if frame.get_length() as u32 > self.send_window {
+                                            // Must not send, block the stream.
+                                            let mut temp_queue = VecDeque::new();
+                                            temp_queue.push_front(frame);
+                                            self.blocked_streams.insert(promised_stream_id, temp_queue);
+
+                                            is_blocked = true;
+                                        }
+                                        else {
+                                            // The frame should be sent, so update the send window.
+                                            self.send_window -= frame.get_length() as u32;
+                                            self.send_frames.push_front(
+                                                Box::new(frame).compress_frame(promised_stream_id)
+                                            );
+                                        }
+                                    }
+                                },
+                                framing::FrameType::Headers => {
+                                    if is_blocked {
+                                        match self.blocked_streams.entry(promised_stream_id) {
+                                            hash_map::Entry::Occupied(mut entry) => {
+                                                entry.get_mut().push_front(frame);
+                                            },
+                                            _ => {
+                                                // TODO there must be a better way to do this. Existence of the entry has been checked.
+                                                panic!("expected map entry but was not found");
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        // Not blocked so just send.
+                                        self.send_frames.push_front(
+                                            Box::new(frame).compress_frame(promised_stream_id)
+                                        );
+                                    }
+                                },
+                                _ => {
+                                    // Not a controlled frame, just send.
+                                    self.send_frames.push_front(
+                                        Box::new(frame).compress_frame(promised_stream_id)
+                                    );
+                                }
+                            }
+                        }
                     },
                     hash_map::Entry::Vacant(_) => {
                         panic!("expected reserved stream, but nothing was found");
@@ -316,11 +385,13 @@ impl<'a> Connection<'a> {
     {
         // TODO this methods is a mess because it needs to borrow self.streams twice. Make it better.
 
+        let stream_id = frame.header.stream_id;
+
         let mut temp_streams = Vec::new();
         {
             let stream = self.streams
                 .entry(frame.header.stream_id)
-                .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_data.clone()));
+                .or_insert(streaming::Stream::new(self.connection_data.clone()));
 
             let stream_response = stream.recv(
                 framing::StreamFrame {
@@ -347,14 +418,82 @@ impl<'a> Connection<'a> {
             // For each push promise, creates a new stream which is in the reserved state and queues that new stream
             // for processing later.
             while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
-                let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
+                let promise_stream = streaming::Stream::new_promise(self.connection_data.clone(), stream_request);
 
                 temp_streams.push((promised_stream_id, promise_stream));
                 self.promised_streams_queue.push_front(promised_stream_id);
             }
 
+            // The below is essentially reconstructing part of a response, starting from the frame which exceeds the 
+            // send window up to the end of the response. 
+            // It could be made more efficient by keeping the response in a block when fetching it from the stream. However,
+            // this impacts the server's ability to multiplex and doesn't allow other flow controlled frame types to be 
+            // added in the future.
+
             // Fetch any send frames which have been generated on the stream.
-            self.send_frames.extend(stream.fetch_send_frames());
+            let mut is_blocked = self.blocked_streams.contains_key(&stream_id);
+            let stream_frames = stream.fetch_send_frames();
+            let mut stream_frame_iter = stream_frames.into_iter().peekable();
+            while let Some(frame) = stream_frame_iter.next() {
+                match frame.get_frame_type() {
+                    framing::FrameType::Data => {
+                        if is_blocked {
+                            // TODO duplicate block
+                            match self.blocked_streams.entry(stream_id) {
+                                hash_map::Entry::Occupied(mut entry) => {
+                                    entry.get_mut().push_front(frame);
+                                },
+                                _ => {
+                                    // TODO there must be a better way to do this. Existence of the entry has been checked.
+                                    panic!("expected map entry but was not found");
+                                }
+                            }
+                        }
+                        else {
+                            if frame.get_length() as u32 > self.send_window {
+                                // Must not send, block the stream.
+                                let mut temp_queue = VecDeque::new();
+                                temp_queue.push_front(frame);
+                                self.blocked_streams.insert(stream_id, temp_queue);
+
+                                is_blocked = true;
+                            }
+                            else {
+                                // The frame should be sent, so update the send window.
+                                self.send_window -= frame.get_length() as u32;
+                                self.send_frames.push_front(
+                                    Box::new(frame).compress_frame(stream_id)
+                                );
+                            }
+                        }
+                    },
+                    framing::FrameType::Headers => {
+                        if is_blocked {
+                            match self.blocked_streams.entry(stream_id) {
+                                hash_map::Entry::Occupied(mut entry) => {
+                                    entry.get_mut().push_front(frame);
+                                },
+                                _ => {
+                                    // TODO there must be a better way to do this. Existence of the entry has been checked.
+                                    panic!("expected map entry but was not found");
+                                }
+                            }
+                        }
+                        else {
+                            // Not blocked so just send.
+                            self.send_frames.push_front(
+                                Box::new(frame).compress_frame(stream_id)
+                            );
+                        }
+                    },
+                    _ => {
+                        // Not a controlled frame, just send.
+                        self.send_frames.push_front(
+                            Box::new(frame).compress_frame(stream_id)
+                        );
+                    }
+                }
+            }
         }
 
         while let Some((promised_stream_id, promised_stream)) = temp_streams.pop() {
@@ -367,7 +506,7 @@ impl<'a> Connection<'a> {
         log_conn_send_frame!("Pushing frame for send", frame);
 
         self.send_frames.push_back(
-            framing::compress_frame(frame, stream_id)
+            frame.compress_frame(stream_id)
         );
     }
 

@@ -23,7 +23,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use std::io;
 use tokio_io;
 use tokio_openssl::{SslAcceptorExt, SslStream};
-use http2::frame as framing;
+use http2::frame::{self as framing, CompressibleHttpFrame};
 use shared::server_settings::SecuritySettings;
 
 const PREFACE: [u8; 24] = [0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a];
@@ -74,7 +74,7 @@ impl h2handshake::H2Handshake for HttpsH2Handshake {
                             // TODO need to check frame type and stream id
                             let settings_frame = framing::settings::SettingsFrame::new(&frame_header, &mut buf.to_vec().into_iter());
 
-                            let response = framing::compress_frame(settings_response, 0x0);
+                            let response = Box::new(settings_response).compress_frame(0x0);
                             future::ok(settings_frame)
                             .join(
                                 tokio_io::io::write_all(stream, response)

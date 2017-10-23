@@ -37,13 +37,13 @@ impl StreamResponse {
         let mut frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
 
         for informational_header in &self.informational_headers {
-            frames.extend(
+            frames.push(
                 StreamResponse::headers_to_frames(informational_header, hpack_send_context, false)
             );
         }
 
         let headers = StreamResponse::headers_to_frames(&self.headers, hpack_send_context, self.payload.is_none() && self.trailer_headers.is_none());
-        frames.extend(headers);
+        frames.push(headers);
 
         if self.payload.is_some() {
             let mut data_frame = framing::data::DataFrameCompressModel::new(false);
@@ -56,7 +56,7 @@ impl StreamResponse {
 
         if self.trailer_headers.is_some() {
             let trailer_headers_frame = StreamResponse::headers_to_frames(&self.trailer_headers.unwrap(), hpack_send_context, true);
-            frames.extend(trailer_headers_frame);
+            frames.push(trailer_headers_frame);
         }
 
         trace!("Converted to frames [{:?}]", frames);
@@ -64,16 +64,14 @@ impl StreamResponse {
         frames
     }
 
-    fn headers_to_frames(headers: &header::Headers, hpack_send_context: &mut hpack_context::SendContext, end_stream: bool) -> Vec<Box<framing::CompressibleHttpFrame>>
+    fn headers_to_frames(headers: &header::Headers, hpack_send_context: &mut hpack_context::SendContext, end_stream: bool) -> Box<framing::CompressibleHttpFrame>
     {
-        let mut temp_frames: Vec<Box<framing::CompressibleHttpFrame>> = Vec::new();
-
         let packed = hpack_pack::pack(&headers, hpack_send_context, true);
         let num_chunks = ((packed.len() as f32) / 150f32).ceil() as i32;
         let mut chunk_count = 1;
         let mut chunks = packed.chunks(150);
 
-        if let Some(first_chunk) = chunks.next() {
+        let mut synthetic_header_block = if let Some(first_chunk) = chunks.next() {
             let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
             if end_stream {
                 headers_frame.set_end_stream();
@@ -82,24 +80,26 @@ impl StreamResponse {
                 headers_frame.set_end_headers();
             }
             headers_frame.set_header_block_fragment(first_chunk.to_vec());
-            temp_frames.push(Box::new(headers_frame));
+            
+            framing::synthetic::HeaderBlockSyntheticFrame::new(headers_frame)
         }
         else {
             panic!("empty headers block");
-        }
+        };
         
         while let Some(chunk) = chunks.next() {
-            let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
-            headers_frame.set_header_block_fragment(chunk.to_vec());
+            let mut continuation_frame = framing::continuation::ContinuationFrameCompressModel::new(
+                chunk.to_vec()
+            );
 
             chunk_count += 1;
             if chunk_count == num_chunks {
-                headers_frame.set_end_headers();
+                continuation_frame.set_end_headers();
             }
 
-            temp_frames.push(Box::new(headers_frame));
+            synthetic_header_block.push_continuation(continuation_frame);
         }
 
-        temp_frames
+        Box::new(synthetic_header_block)
     }
 }

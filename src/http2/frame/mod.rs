@@ -25,6 +25,7 @@ pub mod ping;
 pub mod go_away;
 pub mod window_update;
 pub mod continuation;
+pub mod synthetic;
 
 pub const FRAME_HEADER_SIZE: usize = 9;
 
@@ -37,6 +38,9 @@ use std::fmt;
 // osmium
 pub use self::data::DataFrame;
 
+// TODO find a place for this
+pub type StreamId = u32;
+
 pub trait CompressibleHttpFrame: fmt::Debug {
     fn get_length(&self) -> i32;
 
@@ -45,6 +49,32 @@ pub trait CompressibleHttpFrame: fmt::Debug {
     fn get_flags(&self) -> u8;
 
     fn get_payload(self: Box<Self>) -> Vec<u8>;
+
+    fn compress_frame(self: Box<Self>, stream_id: StreamId) -> Vec<u8>
+    {
+        let mut result = Vec::new();
+
+        let length = self.get_length();
+
+        assert_eq!((length >> 24) as u8, 0, "frame size error");
+        result.push((length >> 16) as u8);
+        result.push((length >> 8) as u8);
+        result.push(length as u8);
+
+        result.push(self.get_frame_type() as u8);
+        result.push(self.get_flags());
+
+        result.push(STREAM_IDENTIFIER_RESERVED_BIT_MASK & (stream_id >> 24) as u8);
+        result.push((stream_id >> 16) as u8);
+        result.push((stream_id >> 8) as u8);
+        result.push(stream_id as u8);
+
+        result.extend(Box::new(self).get_payload());
+
+        log_compressed_frame!("Compressed frame", result);
+
+        result
+    }
 }
 
 #[derive(Debug)]
@@ -119,34 +149,6 @@ pub fn to_frame_type(frame_type: u8) -> Option<FrameType> {
         0x9 => Some(FrameType::Continuation),
         _ => None
     }
-}
-
-pub type StreamId = u32;
-
-pub fn compress_frame(frame: Box<CompressibleHttpFrame>, stream_id: StreamId) -> Vec<u8>
-{
-    let mut result = Vec::new();
-
-    let length = frame.get_length();
-
-    assert_eq!((length >> 24) as u8, 0, "frame size error");
-    result.push((length >> 16) as u8);
-    result.push((length >> 8) as u8);
-    result.push(length as u8);
-
-    result.push(frame.get_frame_type() as u8);
-    result.push(frame.get_flags());
-
-    result.push(STREAM_IDENTIFIER_RESERVED_BIT_MASK & (stream_id >> 24) as u8);
-    result.push((stream_id >> 16) as u8);
-    result.push((stream_id >> 8) as u8);
-    result.push(stream_id as u8);
-
-    result.extend(frame.get_payload());
-
-    log_compressed_frame!("Compressed frame", result);
-
-    result
 }
 
 pub fn decompress_frame_header(frame: Vec<u8>) -> FrameHeader {
