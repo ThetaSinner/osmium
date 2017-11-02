@@ -45,6 +45,13 @@ use http2::core::ConnectionData;
 // TODO it is possible to send multiple data frames, it is necessary to make use of this to avoid
 // sending payloads larger than the allowed size.
 
+// TODO check that peer initiated streams use odd number identifiers.
+
+// TODO while push promised must reference a peer initiated stream when created, nothing prevents many promises
+// being generated on the same peer initiated stream. Therefore, it is necessary to handle the server running out of 
+// stream identifiers to use. The client would just close the connection and open a new one, the server can do the
+// same if it chooses. While waiting to kill the connection, should push promise be disabled?
+
 pub struct Stream {
     state_name: state::StreamStateName,
 

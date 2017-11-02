@@ -34,6 +34,12 @@ use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
 
+// TODO need to track highest stream identifier allocated, to check that incoming stream initiations use a higher
+// stream identifier.
+
+// TODO need to track highest stream identifer for remote streams which have started processing. This is required
+// for GOAWAY
+
 // TODO rename this
 pub struct ConnectionData {
     pub incoming_settings: settings::Settings,
