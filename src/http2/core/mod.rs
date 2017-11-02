@@ -56,6 +56,93 @@ impl ConnectionData {
     }
 }
 
+// TODO this never cleans up.
+struct StreamBlocker {
+    blocked_streams: HashMap<framing::StreamId, VecDeque<Box<framing::CompressibleHttpFrame>>>,
+    priority: VecDeque<framing::StreamId>
+}
+
+// TODO this doesn't have a great interface. These methods have to be called in sequence to some extent.
+impl StreamBlocker {
+    pub fn new() -> Self {
+        StreamBlocker {
+            blocked_streams: HashMap::new(),
+            priority: VecDeque::new()
+        }
+    }
+
+    pub fn block_frame(&mut self, stream_id: framing::StreamId, frame: Box<framing::CompressibleHttpFrame>) {
+        if self.blocked_streams.contains_key(&stream_id) {
+            // This stream is already blocking so append to the queue for this frame
+            match self.blocked_streams.entry(stream_id) {
+                hash_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().push_front(frame);
+                },
+                _ => {
+                    // TODO there must be a better way to do this. Existence of the entry has been checked.
+                    panic!("expected map entry but was not found");
+                }
+            }
+        }
+        else {
+            // Create a new entry in the blocked streams map.
+            let mut q = VecDeque::new();
+            q.push_front(frame);
+            self.blocked_streams.insert(stream_id, q);
+
+            // Prioritise this stream.
+            self.priority.push_front(stream_id);
+        }
+    }
+
+    pub fn is_blocking(&self, stream_id: framing::StreamId) -> bool {
+        self.blocked_streams.contains_key(&stream_id)
+    }
+
+    pub fn get_unblock_priorities(&self) -> VecDeque<framing::StreamId> {
+        self.priority.clone()
+    }
+
+    // Here's a lovely example of a bad interface. You cannot read an entry without the possibility 
+    // of modifying it. Therefore forcing this method, which should not change internal state, to
+    // require self to be mutable.
+    pub fn get_next_send_size(&mut self, stream_id: framing::StreamId) -> Option<i32> {
+        match self.blocked_streams.entry(stream_id) {
+            hash_map::Entry::Occupied(ref entry) => {
+                match entry.get().back() {
+                    Some(ref frame) => {
+                        match frame.get_frame_type() {
+                            framing::FrameType::Data => {
+                                Some(frame.get_length())
+                            },
+                            _ => {
+                                Some(0)
+                            }
+                        }
+                    },
+                    None => {
+                        None
+                    }
+                }
+            },
+            _ => {
+                None
+            }
+        }
+    }
+
+    pub fn get_next_frame(&mut self, stream_id: framing::StreamId) -> Option<Box<framing::CompressibleHttpFrame>> {
+        match self.blocked_streams.entry(stream_id) {
+            hash_map::Entry::Occupied(mut queue) => {
+                queue.get_mut().pop_back()
+            },
+            _ => {
+                None
+            }
+        }
+    }
+}
+
 pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
     frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
@@ -64,8 +151,7 @@ pub struct Connection<'a> {
     hpack_recv_context: hpack_context::RecvContext<'a>,
 
     streams: HashMap<framing::StreamId, streaming::Stream>,
-    // TODO the hashmap is nice for the usage pattern, but doesn't represent order in which streams should be unblocked.
-    blocked_streams: HashMap<framing::StreamId, VecDeque<Box<framing::CompressibleHttpFrame>>>,
+    stream_blocker: StreamBlocker,
 
     promised_streams_queue: VecDeque<framing::StreamId>,
 
@@ -83,7 +169,7 @@ impl<'a> Connection<'a> {
             hpack_send_context: hpack_send_context,
             hpack_recv_context: hpack_recv_context,
             streams: HashMap::new(),
-            blocked_streams: HashMap::new(),
+            stream_blocker: StreamBlocker::new(),
             promised_streams_queue: VecDeque::new(),
             connection_data: Rc::new(RefCell::new(ConnectionData::new())),
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
@@ -206,6 +292,7 @@ impl<'a> Connection<'a> {
                     }
                     else {
                         self.send_window += window_update_frame.get_window_size_increment();
+                        self.try_unblock_streams();
                     }
                 }
                 else {
@@ -294,8 +381,7 @@ impl<'a> Connection<'a> {
 
                         // TODO duplicated code
                         // Fetch any send frames which have been generated on the stream.
-                        // TODO why does this need a reference?
-                        let mut is_blocked = self.blocked_streams.contains_key(&promised_stream_id);
+                        let mut is_blocked = self.stream_blocker.is_blocking(promised_stream_id);
                         let stream_frames = stream.fetch_send_frames();
                         // TODO doesn't need to peek any more
                         let mut stream_frame_iter = stream_frames.into_iter().peekable();
@@ -303,24 +389,13 @@ impl<'a> Connection<'a> {
                             match frame.get_frame_type() {
                                 framing::FrameType::Data => {
                                     if is_blocked {
-                                        // TODO duplicate block
-                                        match self.blocked_streams.entry(promised_stream_id) {
-                                            hash_map::Entry::Occupied(mut entry) => {
-                                                entry.get_mut().push_front(frame);
-                                            },
-                                            _ => {
-                                                // TODO there must be a better way to do this. Existence of the entry has been checked.
-                                                panic!("expected map entry but was not found");
-                                            }
-                                        }
+                                        self.stream_blocker.block_frame(promised_stream_id, frame);
                                     }
                                     else {
                                         // TODO which is the correct type? because it is a size, it really should be unsigned.
                                         if frame.get_length() as u32 > self.send_window {
                                             // Must not send, block the stream.
-                                            let mut temp_queue = VecDeque::new();
-                                            temp_queue.push_front(frame);
-                                            self.blocked_streams.insert(promised_stream_id, temp_queue);
+                                            self.stream_blocker.block_frame(promised_stream_id, frame);
 
                                             is_blocked = true;
                                         }
@@ -335,15 +410,7 @@ impl<'a> Connection<'a> {
                                 },
                                 framing::FrameType::Headers => {
                                     if is_blocked {
-                                        match self.blocked_streams.entry(promised_stream_id) {
-                                            hash_map::Entry::Occupied(mut entry) => {
-                                                entry.get_mut().push_front(frame);
-                                            },
-                                            _ => {
-                                                // TODO there must be a better way to do this. Existence of the entry has been checked.
-                                                panic!("expected map entry but was not found");
-                                            }
-                                        }
+                                        self.stream_blocker.block_frame(promised_stream_id, frame);
                                     }
                                     else {
                                         // Not blocked so just send.
@@ -431,30 +498,19 @@ impl<'a> Connection<'a> {
             // added in the future.
 
             // Fetch any send frames which have been generated on the stream.
-            let mut is_blocked = self.blocked_streams.contains_key(&stream_id);
+            let mut is_blocked = self.stream_blocker.is_blocking(stream_id);
             let stream_frames = stream.fetch_send_frames();
             let mut stream_frame_iter = stream_frames.into_iter().peekable();
             while let Some(frame) = stream_frame_iter.next() {
                 match frame.get_frame_type() {
                     framing::FrameType::Data => {
                         if is_blocked {
-                            // TODO duplicate block
-                            match self.blocked_streams.entry(stream_id) {
-                                hash_map::Entry::Occupied(mut entry) => {
-                                    entry.get_mut().push_front(frame);
-                                },
-                                _ => {
-                                    // TODO there must be a better way to do this. Existence of the entry has been checked.
-                                    panic!("expected map entry but was not found");
-                                }
-                            }
+                            self.stream_blocker.block_frame(stream_id, frame);
                         }
                         else {
                             if frame.get_length() as u32 > self.send_window {
                                 // Must not send, block the stream.
-                                let mut temp_queue = VecDeque::new();
-                                temp_queue.push_front(frame);
-                                self.blocked_streams.insert(stream_id, temp_queue);
+                                self.stream_blocker.block_frame(stream_id, frame);
 
                                 is_blocked = true;
                             }
@@ -469,15 +525,7 @@ impl<'a> Connection<'a> {
                     },
                     framing::FrameType::Headers => {
                         if is_blocked {
-                            match self.blocked_streams.entry(stream_id) {
-                                hash_map::Entry::Occupied(mut entry) => {
-                                    entry.get_mut().push_front(frame);
-                                },
-                                _ => {
-                                    // TODO there must be a better way to do this. Existence of the entry has been checked.
-                                    panic!("expected map entry but was not found");
-                                }
-                            }
+                            self.stream_blocker.block_frame(stream_id, frame);
                         }
                         else {
                             // Not blocked so just send.
@@ -660,6 +708,34 @@ impl<'a> Connection<'a> {
         if update_amount > 0 {
             let window_update_frame = framing::window_update::WindowUpdateFrameCompressModel::new(update_amount);
             self.push_send_frame(Box::new(window_update_frame), 0x0);
+        }
+    }
+
+    fn try_unblock_streams(&mut self) {
+        let mut unblock_priorities = self.stream_blocker.get_unblock_priorities();
+
+        while let Some(stream_id) = unblock_priorities.pop_back() {
+            let next_send_size = self.stream_blocker.get_next_send_size(stream_id);
+
+            match next_send_size {
+                Some(size) => {
+                    if (size as u32) < self.send_window {
+                        // TODO group these operations together? they're done in several places.
+                        self.send_window -= size as u32;
+
+                        let send_frame = self.stream_blocker.get_next_frame(stream_id).unwrap();
+                        self.push_send_frame(send_frame, stream_id);
+                    }
+                    else {
+                        continue;
+                    }
+                },
+                None => {
+                    // TODO If fetch size failed then it is possible that the block has been cleared and
+                    // can be cleaned up.
+                    continue;
+                }
+            }
         }
     }
 }
