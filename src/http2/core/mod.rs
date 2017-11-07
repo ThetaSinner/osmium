@@ -43,7 +43,7 @@ use http2::settings;
 // TODO rename this
 pub struct ConnectionData {
     pub incoming_settings: settings::Settings,
-    next_server_created_stream_id: u32 // TODO typedef
+    next_server_created_stream_id: framing::StreamId
 }
 
 impl ConnectionData {
@@ -54,8 +54,7 @@ impl ConnectionData {
         }
     }
 
-    // TODO This could be named better
-    pub fn get_next_server_created_stream_id(&mut self) -> u32 {
+    pub fn get_next_stream_id_for_locally_initiated_stream(&mut self) -> u32 {
         let id = self.next_server_created_stream_id;
         self.next_server_created_stream_id += 2;
         id
