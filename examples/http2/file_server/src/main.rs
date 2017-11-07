@@ -78,14 +78,37 @@ impl shared::server_trait::OsmiumServer for MyServer {
             if header.name == header::HeaderName::PseudoPath {
                 match header.value {
                     header::HeaderValue::Str(ref path) => {
-                        match path.as_ref() {
-                            "/" => {
-                                return handle_index(handle);
+                        let path_to_open = if path == "/" {
+                            String::from("site/index.html")
+                        }
+                        else {
+                            String::from("site") + path
+                        };
+                        let doc = File::open(path_to_open);
+
+                        match doc {
+                            Ok(mut doc) => {
+                                let mut contents = Vec::new();
+                                doc.read_to_end(&mut contents).expect("something went wrong reading the file");
+
+                                let mut headers = header::Headers::new();
+                                headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(200));
+                                headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(contents.len() as i32));
+                                headers.push(header::HeaderName::ContentType, header::HeaderValue::Str(String::from("text/html")));
+
+                                let t = chrono::Local::now();
+                                headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+                                    format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+                                ));
+
+                                return HttpResponse {
+                                    headers: headers,
+                                    body: Some(contents)
+                                };
                             },
-                            "/cractal_hexagon_geometric_small.jpg" => {
-                                return handle_img(handle);
-                            },
-                            _ => {
+                            Err(e) => {
+                                warn!("error getting file {:?}", e);
+
                                 let mut headers = header::Headers::new();
                                 headers.push(header::HeaderName::PseudoStatus, header::HeaderValue::Num(404));
                                 headers.push(header::HeaderName::ContentLength, header::HeaderValue::Num(0));
@@ -133,7 +156,12 @@ fn handle_index(handle: Box<&mut ConnectionHandle>) -> HttpResponse {
         headers.push(header::HeaderName::PseudoMethod, header::HeaderValue::Str(String::from("GET")));
         headers.push(header::HeaderName::PseudoAuthority, header::HeaderValue::Str(String::from("localhost:8080")));
         headers.push(header::HeaderName::PseudoScheme, header::HeaderValue::Str(String::from("https")));
-        headers.push(header::HeaderName::PseudoPath, header::HeaderValue::Str(String::from("/cractal_hexagon_geometric_small.jpg")));let t = chrono::Local::now();
+        headers.push(header::HeaderName::PseudoPath, header::HeaderValue::Str(String::from("/cractal_hexagon_geometric_small.jpg")));
+        
+        let t = chrono::Local::now();
+        headers.push(header::HeaderName::Date, header::HeaderValue::Str(
+            format!("{} GMT", t.format("%a, %d %b %Y %H:%M:%S").to_string())
+        ));
 
         let request = streaming::StreamRequest {
             headers: headers,

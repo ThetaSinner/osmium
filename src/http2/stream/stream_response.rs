@@ -71,6 +71,8 @@ impl StreamResponse {
         let mut chunk_count = 1;
         let mut chunks = packed.chunks(150);
 
+        trace!("Breaking headers into [{}] chunks", num_chunks);
+
         let mut synthetic_header_block = if let Some(first_chunk) = chunks.next() {
             let mut headers_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
             if end_stream {

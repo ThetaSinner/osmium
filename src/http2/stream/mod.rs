@@ -53,6 +53,8 @@ use http2::core::ConnectionData;
 // same if it chooses. While waiting to kill the connection, should push promise be disabled?
 
 pub struct Stream {
+    id: framing::StreamId,
+
     state_name: state::StreamStateName,
 
     temp_header_block: Vec<u8>,
@@ -75,8 +77,10 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(connection_data: Rc<RefCell<ConnectionData>>) -> Self {
+    pub fn new(id: framing::StreamId, connection_data: Rc<RefCell<ConnectionData>>) -> Self {
         Stream {
+            id: id,
+
             state_name: state::StreamStateName::Idle(state::StreamState::<state::StateIdle>::new()),
 
             temp_header_block: Vec::new(),
@@ -99,8 +103,8 @@ impl Stream {
         }
     }
 
-    pub fn new_promise(connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
-        let mut promised_stream = Stream::new(connection_data);
+    pub fn new_promise(id: framing::StreamId, connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
+        let mut promised_stream = Stream::new(id, connection_data);
 
         promised_stream.state_name = if let state::StreamStateName::Idle(ref state) = promised_stream.state_name {
             state::StreamStateName::ReservedLocal((state, request).into())

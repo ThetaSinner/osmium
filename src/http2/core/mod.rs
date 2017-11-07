@@ -379,7 +379,7 @@ impl<'a> Connection<'a> {
                         stream.recv_promised(&mut self.hpack_send_context, app);
 
                         while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
-                            let promise_stream = streaming::Stream::new_promise(self.connection_data.clone(), stream_request);
+                            let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
 
                             temp_streams.push((promised_stream_id, promise_stream));
                             self.promised_streams_queue.push_front(promised_stream_id);
@@ -390,7 +390,7 @@ impl<'a> Connection<'a> {
                         let mut is_blocked = self.stream_blocker.is_blocking(promised_stream_id);
                         let stream_frames = stream.fetch_send_frames();
                         // TODO doesn't need to peek any more
-                        let mut stream_frame_iter = stream_frames.into_iter().peekable();
+                        let mut stream_frame_iter = stream_frames.into_iter().rev();
                         while let Some(frame) = stream_frame_iter.next() {
                             match frame.get_frame_type() {
                                 framing::FrameType::Data => {
@@ -464,7 +464,7 @@ impl<'a> Connection<'a> {
         {
             let stream = self.streams
                 .entry(frame.header.stream_id)
-                .or_insert(streaming::Stream::new(self.connection_data.clone()));
+                .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_data.clone()));
 
             let stream_response = stream.recv(
                 framing::StreamFrame {
@@ -491,7 +491,7 @@ impl<'a> Connection<'a> {
             // For each push promise, creates a new stream which is in the reserved state and queues that new stream
             // for processing later.
             while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
-                let promise_stream = streaming::Stream::new_promise(self.connection_data.clone(), stream_request);
+                let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_data.clone(), stream_request);
 
                 temp_streams.push((promised_stream_id, promise_stream));
                 self.promised_streams_queue.push_front(promised_stream_id);
@@ -506,7 +506,7 @@ impl<'a> Connection<'a> {
             // Fetch any send frames which have been generated on the stream.
             let mut is_blocked = self.stream_blocker.is_blocking(stream_id);
             let stream_frames = stream.fetch_send_frames();
-            let mut stream_frame_iter = stream_frames.into_iter().peekable();
+            let mut stream_frame_iter = stream_frames.into_iter().rev();
             while let Some(frame) = stream_frame_iter.next() {
                 match frame.get_frame_type() {
                     framing::FrameType::Data => {
@@ -548,6 +548,8 @@ impl<'a> Connection<'a> {
                     }
                 }
             }
+
+            info!("Blocked streams {:?}", self.stream_blocker.get_unblock_priorities());
         }
 
         while let Some((promised_stream_id, promised_stream)) = temp_streams.pop() {
