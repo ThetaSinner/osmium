@@ -759,7 +759,7 @@ impl Stream {
                 while let Some(request) = self.push_promise_queue.pop_back() {
                     let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
 
-                    let promised_stream_identifier = self.connection_data.borrow_mut().get_next_server_created_stream_id();
+                    let promised_stream_identifier = self.connection_data.borrow_mut().get_next_stream_id_for_locally_initiated_stream();
                     push_promise_frame.set_promised_stream_identifier(
                         promised_stream_identifier
                     );
