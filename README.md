@@ -8,7 +8,7 @@ An http2 server
 
 - Make sure you have rustc 1.21 (or above)
 - Install OpenSSL 1.0.2 (or above)
-- On some systems it might be enough to add OpenSSL to the path. However, setting the variable OPENSSL_DIR to the root directory of the OpenSSL   install (i.e. not the /bin subdirectory)
+- On some systems it might be enough to add OpenSSL to the path. For something that should work everywhere, setting the variable OPENSSL_DIR to the root directory of the OpenSSL install (i.e. not the /bin subdirectory)
 - Clone [this repository](https://github.com/ThetaSinner/osmium)
 - run `cargo build` in the project root
 
