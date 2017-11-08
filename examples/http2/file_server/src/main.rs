@@ -23,7 +23,7 @@ extern crate chrono;
 use std::fs::File;
 use std::io::prelude::*;
 use osmium::http2::{self, net, header, stream as streaming};
-use http2::core::ConnectionHandle;
+use osmium::shared::connection_handle::ConnectionHandle;
 use osmium::shared;
 use chrono::{DateTime, TimeZone, NaiveDateTime, Utc, Local};
 use chrono::prelude::*;

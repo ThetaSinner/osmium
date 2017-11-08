@@ -16,7 +16,7 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO move this trait
-use http2::core::ConnectionHandle;
+use shared::connection_handle::ConnectionHandle;
 
 pub trait OsmiumServer {
     type Request;

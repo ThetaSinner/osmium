@@ -237,7 +237,7 @@ mod tests {
     use http2::header;
     use http2::stream as streaming;
     use shared::{server_trait, server_settings};
-    use http2::core::ConnectionHandle;
+    use shared::connection_handle::ConnectionHandle;
 
     struct MyServer;
 

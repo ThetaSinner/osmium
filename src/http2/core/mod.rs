@@ -746,15 +746,3 @@ impl<'a> Connection<'a> {
         }
     }
 }
-
-pub enum PushError {
-    TooManyActiveStreams
-}
-
-use http2::stream::StreamRequest;
-
-pub trait ConnectionHandle {
-    fn is_push_enabled(&self) -> bool;
-
-    fn push_promise(&mut self, request: StreamRequest) -> Option<PushError>;
-}

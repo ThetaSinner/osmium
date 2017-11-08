@@ -35,8 +35,9 @@ use http2::error;
 use http2::header;
 use http2::hpack::{context as hpack_context, pack as hpack_pack};
 use shared::server_trait;
-use http2::core::ConnectionHandle;
+use shared::connection_handle::ConnectionHandle;
 use http2::core::ConnectionData;
+use shared::push_error;
 
 // TODO break this file up!
 
@@ -780,15 +781,13 @@ impl Stream {
         }
     }
 
-    fn queue_push_promise(&mut self, request: StreamRequest) -> Option<PushError> {
+    fn queue_push_promise(&mut self, request: StreamRequest) -> Option<push_error::PushError> {
         self.push_promise_queue.push_front(request);
 
         // TODO handle errors.
         None
     }
 }
-
-use http2::core::PushError;
 
 impl ConnectionHandle for Stream {
     fn is_push_enabled(&self) -> bool {
@@ -797,7 +796,7 @@ impl ConnectionHandle for Stream {
         self.connection_data.borrow().incoming_settings.enable_push
     }
 
-    fn push_promise(&mut self, request: StreamRequest) -> Option<PushError> {
+    fn push_promise(&mut self, request: StreamRequest) -> Option<push_error::PushError> {
         self.queue_push_promise(request)
     }
 }

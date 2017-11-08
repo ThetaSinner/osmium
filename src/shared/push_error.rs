@@ -13,9 +13,13 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
+// along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
-pub mod server_trait;
-pub mod server_settings;
-pub mod connection_handle;
-pub mod push_error;
+/// Error enumeration for relaying errors which occur when the application tries to
+/// push a promise.
+
+pub enum PushError {
+    /// This error occurs when an attempt is made to create a new push promise but
+    /// the allowed limit for concurrent promises has already been reached.
+    TooManyActiveStreams
+}
