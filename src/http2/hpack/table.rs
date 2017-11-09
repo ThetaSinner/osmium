@@ -17,7 +17,6 @@
 
 // std
 use std::collections::VecDeque;
-use std::ascii::AsciiExt;
 
 #[derive(Clone, Debug)]
 pub struct Field {
