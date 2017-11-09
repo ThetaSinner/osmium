@@ -36,7 +36,7 @@ use http2::header;
 use http2::hpack::{context as hpack_context, pack as hpack_pack};
 use shared::server_trait;
 use shared::connection_handle::ConnectionHandle;
-use http2::core::ConnectionData;
+use http2::core::connection_data::ConnectionData;
 use shared::push_error;
 
 // TODO break this file up!

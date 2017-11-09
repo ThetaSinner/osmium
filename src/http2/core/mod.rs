@@ -19,6 +19,7 @@
 
 mod connection_frame_state;
 mod flow_control;
+pub mod connection_data;
 
 // std
 use std::collections::{VecDeque, hash_map, HashMap};
@@ -39,27 +40,6 @@ use http2::settings;
 
 // TODO need to track highest stream identifer for remote streams which have started processing. This is required
 // for GOAWAY
-
-// TODO rename this
-pub struct ConnectionData {
-    pub incoming_settings: settings::Settings,
-    next_server_created_stream_id: framing::StreamId
-}
-
-impl ConnectionData {
-    pub fn new() -> Self {
-        ConnectionData {
-            incoming_settings: settings::Settings::spec_default(),
-            next_server_created_stream_id: 2
-        }
-    }
-
-    pub fn get_next_stream_id_for_locally_initiated_stream(&mut self) -> u32 {
-        let id = self.next_server_created_stream_id;
-        self.next_server_created_stream_id += 2;
-        id
-    }
-}
 
 // TODO this never cleans up.
 struct StreamBlocker {
@@ -160,7 +140,7 @@ pub struct Connection<'a> {
 
     promised_streams_queue: VecDeque<framing::StreamId>,
 
-    connection_data: Rc<RefCell<ConnectionData>>,
+    connection_data: Rc<RefCell<connection_data::ConnectionData>>,
 
     send_window: u32,
     receive_window: u32
@@ -176,7 +156,7 @@ impl<'a> Connection<'a> {
             streams: HashMap::new(),
             stream_blocker: StreamBlocker::new(),
             promised_streams_queue: VecDeque::new(),
-            connection_data: Rc::new(RefCell::new(ConnectionData::new())),
+            connection_data: Rc::new(RefCell::new(connection_data::ConnectionData::new())),
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };
