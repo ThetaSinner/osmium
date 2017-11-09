@@ -19,15 +19,14 @@
 use http2::settings;
 use http2::frame as framing;
 
-// TODO rename this
-pub struct ConnectionData {
+pub struct ConnectionSharedState {
     pub incoming_settings: settings::Settings,
     next_server_created_stream_id: framing::StreamId
 }
 
-impl ConnectionData {
+impl ConnectionSharedState {
     pub fn new() -> Self {
-        ConnectionData {
+        ConnectionSharedState {
             incoming_settings: settings::Settings::spec_default(),
             next_server_created_stream_id: 2
         }

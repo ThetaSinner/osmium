@@ -36,7 +36,7 @@ use http2::header;
 use http2::hpack::{context as hpack_context, pack as hpack_pack};
 use shared::server_trait;
 use shared::connection_handle::ConnectionHandle;
-use http2::core::connection_data::ConnectionData;
+use http2::core::connection_shared_state::ConnectionSharedState;
 use shared::push_error;
 
 // TODO break this file up!
@@ -65,7 +65,7 @@ pub struct Stream {
 
     send_frames: Vec<Box<framing::CompressibleHttpFrame>>,
 
-    connection_data: Rc<RefCell<ConnectionData>>,
+    connection_shared_state: Rc<RefCell<ConnectionSharedState>>,
 
     push_promise_queue: VecDeque<StreamRequest>,
 
@@ -78,7 +78,7 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(id: framing::StreamId, connection_data: Rc<RefCell<ConnectionData>>) -> Self {
+    pub fn new(id: framing::StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>) -> Self {
         Stream {
             id: id,
 
@@ -95,7 +95,7 @@ impl Stream {
 
             send_frames: Vec::new(),
 
-            connection_data: connection_data,
+            connection_shared_state: connection_shared_state,
 
             push_promise_queue: VecDeque::new(),
             push_promise_publish_queue: VecDeque::new(),
@@ -104,8 +104,8 @@ impl Stream {
         }
     }
 
-    pub fn new_promise(id: framing::StreamId, connection_data: Rc<RefCell<ConnectionData>>, request: StreamRequest) -> Self {
-        let mut promised_stream = Stream::new(id, connection_data);
+    pub fn new_promise(id: framing::StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>, request: StreamRequest) -> Self {
+        let mut promised_stream = Stream::new(id, connection_shared_state);
 
         promised_stream.state_name = if let state::StreamStateName::Idle(ref state) = promised_stream.state_name {
             state::StreamStateName::ReservedLocal((state, request).into())
@@ -760,7 +760,7 @@ impl Stream {
                 while let Some(request) = self.push_promise_queue.pop_back() {
                     let mut push_promise_frame = framing::push_promise::PushPromiseFrameCompressModel::new(true);
 
-                    let promised_stream_identifier = self.connection_data.borrow_mut().get_next_stream_id_for_locally_initiated_stream();
+                    let promised_stream_identifier = self.connection_shared_state.borrow_mut().get_next_stream_id_for_locally_initiated_stream();
                     push_promise_frame.set_promised_stream_identifier(
                         promised_stream_identifier
                     );
@@ -793,7 +793,7 @@ impl ConnectionHandle for Stream {
     fn is_push_enabled(&self) -> bool {
         // TODO modify the stream to understand that it is a synthetic stream, and do not allow promises to be sent in that case.
         // TODO test that updating server push setting while running actually updates this value.
-        self.connection_data.borrow().incoming_settings.enable_push
+        self.connection_shared_state.borrow().incoming_settings.enable_push
     }
 
     fn push_promise(&mut self, request: StreamRequest) -> Option<push_error::PushError> {
