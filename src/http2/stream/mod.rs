@@ -518,6 +518,9 @@ impl Stream {
               R: convert::From<StreamRequest>,
               S: convert::Into<StreamResponse>
     {
+        // TODO Because promises are required to be 'safe', there is no need for the client to know
+        // whether we've started processing a promise, the below can be safely removed.
+
         // This is normally set when the request has been fully received. In this situation, set it as soon as the 
         // synthetic request has started to execute.
         self.started_processing_request = true;
@@ -743,10 +746,16 @@ impl Stream {
                     return;
                 }
 
+                // TODO This would mean polling all streams to check their status. That's just a pain
+                // the information should be consolidated as the server runs. It's being replaced by the 
+                // shared connection state method.
+
                 // As soon as we've started processing, this flag needs to have been set to true.
                 // This allows the server to tell the client which streams have started to be processed
                 // in the event of an error.
                 self.started_processing_request = true;
+
+                self.connection_shared_state.borrow_mut().notify_processing_started_on_stream(self.id);
 
                 let mut new_request = StreamRequest::new();
                 mem::swap(&mut self.request, &mut new_request);

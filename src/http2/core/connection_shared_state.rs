@@ -20,15 +20,21 @@ use http2::settings;
 use http2::frame as framing;
 
 pub struct ConnectionSharedState {
+    // TODO rename to remote settings
     pub incoming_settings: settings::Settings,
-    next_server_created_stream_id: framing::StreamId
+    next_server_created_stream_id: framing::StreamId,
+    // If streams were ever made concurrent it would be VITAL that this is locked. It is used to communicate to
+    // the client which streams have started processing, or at least the highest numbered one. That means no more
+    // streams may start processing once this has been sent.
+    highest_started_processing_stream_id: framing::StreamId
 }
 
 impl ConnectionSharedState {
     pub fn new() -> Self {
         ConnectionSharedState {
             incoming_settings: settings::Settings::spec_default(),
-            next_server_created_stream_id: 2
+            next_server_created_stream_id: 2,
+            highest_started_processing_stream_id: 0
         }
     }
 
@@ -36,5 +42,11 @@ impl ConnectionSharedState {
         let id = self.next_server_created_stream_id;
         self.next_server_created_stream_id += 2;
         id
+    }
+
+    pub fn notify_processing_started_on_stream(&mut self, stream_id: framing::StreamId) {
+        if stream_id > self.highest_started_processing_stream_id {
+            self.highest_started_processing_stream_id = stream_id;
+        }
     }
 }
