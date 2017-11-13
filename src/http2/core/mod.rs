@@ -56,6 +56,8 @@ pub struct Connection<'a> {
 
     connection_shared_state: Rc<RefCell<connection_shared_state::ConnectionSharedState>>,
 
+    highest_remote_initiated_stream_identifier: framing::StreamId,
+
     send_window: u32,
     receive_window: u32
 }
@@ -71,6 +73,7 @@ impl<'a> Connection<'a> {
             stream_blocker: stream_blocker::StreamBlocker::new(),
             promised_streams_queue: VecDeque::new(),
             connection_shared_state: Rc::new(RefCell::new(connection_shared_state::ConnectionSharedState::new())),
+            highest_remote_initiated_stream_identifier: 0,
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };
@@ -355,9 +358,23 @@ impl<'a> Connection<'a> {
 
         let mut temp_streams = Vec::new();
         {
-            let stream = self.streams
-                .entry(frame.header.stream_id)
-                .or_insert(streaming::Stream::new(frame.header.stream_id, self.connection_shared_state.clone()));
+            // Ensure there is always a stream with the current identifier.
+            if !self.streams.contains_key(&stream_id) {
+                self.streams.insert(
+                    stream_id,
+                    streaming::Stream::new(stream_id, self.connection_shared_state.clone())
+                );
+
+                if stream_id <= self.highest_remote_initiated_stream_identifier {
+                    // TODO handle connection shutdown.
+                    panic!("Invalid stream identifier sent by client.");
+                }
+                else {
+                    self.highest_remote_initiated_stream_identifier = stream_id;
+                }
+            }
+
+            let stream = self.streams.get_mut(&stream_id).unwrap();
 
             let stream_response = stream.recv(
                 framing::StreamFrame {
