@@ -36,11 +36,9 @@ use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
 
-// TODO need to track highest stream identifier allocated, to check that incoming stream initiations use a higher
-// stream identifier.
-
-// TODO need to track highest stream identifer for remote streams which have started processing. This is required
-// for GOAWAY
+// TODO (goaway) This connection struct doesn't have a unified way of processing frames on send. Need to look at
+// how goaway frames are sent, from here and from streams. When a goaway is sent the net code needs to start shutdown
+// and stop processing.
 
 pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
@@ -412,6 +410,8 @@ impl<'a> Connection<'a> {
             // It could be made more efficient by keeping the response in a block when fetching it from the stream. However,
             // this impacts the server's ability to multiplex and doesn't allow other flow controlled frame types to be 
             // added in the future.
+
+            // TODO the code below could easily be split out into another function?
 
             // Fetch any send frames which have been generated on the stream.
             let mut is_blocked = self.stream_blocker.is_blocking(stream_id);

@@ -129,12 +129,15 @@ impl<T, R, S> Server<T, R, S>
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
+                            // TODO (goaway) Give a oneshot channel to the connection it can use to signal read shutdown.
                             let mut connection = core::Connection::new(
                                 server_instance.hpack.new_send_context(),
                                 server_instance.hpack.new_recv_context(),
                                 temp_frame
                             );
 
+                            // TODO (goaway) When the read loop shuts down, the other end of this channel is destroyed so this iterator
+                            // SHOULD end... I hope.
                             let mut msg_iter = rx.iter();
                             while let Some(msg) = msg_iter.next() {
                                 connection.push_frame(
@@ -157,6 +160,12 @@ impl<T, R, S> Server<T, R, S>
                                     }
                                 }
                             }
+
+                            // TODO (goaway) The loop has exited (again, hopefully) so check for send frames and figure out how to
+                            // keep the send loop alive long enough to make sure the goaway frame has sent.
+                            // TODO (goaway) Then make sure the send loop shuts down. When ftx is dropped the loop should end but it needs
+                            // to be checked.
+                            // Now just letting this closure exit will free this thread back into the pool to be used again.
                         });
 
                         let reader_loop = loop_fn((reader, tx), move |(reader, to_conn_thread)| {
@@ -185,6 +194,8 @@ impl<T, R, S> Server<T, R, S>
                                 });
 
                             read_frame_future
+                                // TODO (goaway) put a select in here which reads from a shutdown oneshot channel. 
+                                // When this loop exits, tx a.k.a. to_conn_thread will be dropped.
                                 .join(future::ok(to_conn_thread))
                                 .and_then(|(((reader, payload_buf), frame_header), to_conn_thread)| {
                                     trace!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
