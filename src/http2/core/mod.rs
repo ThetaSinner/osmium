@@ -35,6 +35,7 @@ use http2::stream as streaming;
 use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
+use http2::net::shutdown_signal;
 
 // TODO (goaway) This connection struct doesn't have a unified way of processing frames on send. Need to look at
 // how goaway frames are sent, from here and from streams. When a goaway is sent the net code needs to start shutdown
@@ -56,12 +57,20 @@ pub struct Connection<'a> {
 
     highest_remote_initiated_stream_identifier: framing::StreamId,
 
+    shutdown_signaller: shutdown_signal::ShutdownSignaller,
+
     send_window: u32,
     receive_window: u32
 }
 
 impl<'a> Connection<'a> {
-    pub fn new(hpack_send_context: hpack_context::SendContext<'a>, hpack_recv_context: hpack_context::RecvContext<'a>, initial_settings: framing::settings::SettingsFrame) -> Connection<'a> {
+    pub fn new(
+        hpack_send_context: hpack_context::SendContext<'a>, 
+        hpack_recv_context: hpack_context::RecvContext<'a>, 
+        initial_settings: framing::settings::SettingsFrame,
+        shutdown_signaller: shutdown_signal::ShutdownSignaller
+    ) -> Connection<'a> 
+    {
         let mut new_con = Connection {
             send_frames: VecDeque::new(),
             frame_state_validator: connection_frame_state::ConnectionFrameStateValidator::new(),
@@ -72,6 +81,7 @@ impl<'a> Connection<'a> {
             promised_streams_queue: VecDeque::new(),
             connection_shared_state: Rc::new(RefCell::new(connection_shared_state::ConnectionSharedState::new())),
             highest_remote_initiated_stream_identifier: 0,
+            shutdown_signaller: shutdown_signaller,
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };

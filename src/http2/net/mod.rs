@@ -18,6 +18,7 @@
 pub mod h2handshake;
 pub mod https;
 pub mod openssl_helper;
+pub mod shutdown_signal;
 
 // std
 use std::sync::mpsc;
@@ -28,8 +29,9 @@ use std::mem;
 
 // tokio
 use futures::{Stream, Sink, Future, stream};
-use futures::future::{self, loop_fn, Loop};
+use futures::future::{self, loop_fn};
 use futures::sync::mpsc as futures_mpsc;
+use futures::sync::oneshot as futures_oneshot;
 use tokio_core;
 use tokio_io::io as tokio_io;
 use tokio_io::AsyncRead;
@@ -121,19 +123,21 @@ impl<T, R, S> Server<T, R, S>
                 
                 match handshake_result {
                     Ok(mut handshake_completion) => {
+                        // TODO (naming) really? temp_frame... fix me
                         let mut temp_frame = framing::settings::SettingsFrame::new_noop();
                         mem::swap(&mut handshake_completion.settings_frame, &mut temp_frame);
                         
                         let (reader, writer) = handshake_completion.stream.split();
 
+                        let (shutdown_read_tx, shutdown_read_rx) = futures_oneshot::channel::<u8>();
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
-                            // TODO (goaway) Give a oneshot channel to the connection it can use to signal read shutdown.
                             let mut connection = core::Connection::new(
                                 server_instance.hpack.new_send_context(),
                                 server_instance.hpack.new_recv_context(),
-                                temp_frame
+                                temp_frame,
+                                shutdown_signal::ShutdownSignaller::new(shutdown_read_tx)
                             );
 
                             // TODO (goaway) When the read loop shuts down, the other end of this channel is destroyed so this iterator
@@ -168,7 +172,15 @@ impl<T, R, S> Server<T, R, S>
                             // Now just letting this closure exit will free this thread back into the pool to be used again.
                         });
 
-                        let reader_loop = loop_fn((reader, tx), move |(reader, to_conn_thread)| {
+                        let shutdown_read_future = shutdown_read_rx.map_err(|e| {
+                            println!("Error on read shutdown {}. Maybe the connection ended without the server requesting a shutdown?", e);
+                        })
+                        .map(|_| [
+                            // value received on shutdown oneshot, ignore value.
+                            ()
+                        ]);
+
+                        let reader_loop = loop_fn((reader, tx, shutdown_read_future), move |(reader, to_conn_thread, shutdown_read_future)| {
                             // this read exact will run on the event loop until enough bytes for an
                             // http2 header frame have been read
 
@@ -193,20 +205,31 @@ impl<T, R, S> Server<T, R, S>
                                         .join(future::ok(frame_header))
                                 });
 
-                            read_frame_future
+                            let loop_read_frame_future = read_frame_future
                                 // TODO (goaway) put a select in here which reads from a shutdown oneshot channel. 
                                 // When this loop exits, tx a.k.a. to_conn_thread will be dropped.
-                                .join(future::ok(to_conn_thread))
-                                .and_then(|(((reader, payload_buf), frame_header), to_conn_thread)| {
-                                    trace!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
+                                .join(future::ok(to_conn_thread));
 
-                                    to_conn_thread.send((frame_header, payload_buf)).unwrap();
+                            loop_read_frame_future.select2(shutdown_read_future).then(|result| {
+                                match result {
+                                    Ok(future::Either::A(((((reader, payload_buf), frame_header), to_conn_thread), shutdown_read_future))) => {
+                                        trace!("got frame [{:?}]: [{:?}]", frame_header, payload_buf);
 
-                                    Ok(Loop::Continue((reader, to_conn_thread.clone())))
-                                })
+                                        to_conn_thread.send((frame_header, payload_buf)).unwrap();
+
+                                        Ok(future::Loop::Continue((reader, to_conn_thread, shutdown_read_future)))
+                                    },
+                                    Ok(future::Either::B((_, read_future))) => {
+                                        Ok(future::Loop::Break(read_future))
+                                    },
+                                    _ => {
+                                        panic!("not handled yet");
+                                    }
+                                }
+                            })
                         });
 
-                        inner_handle.spawn(reader_loop);
+                        inner_handle.spawn(reader_loop.map(|_| {()}));
 
                         let send_loop = frx.fold(writer, |writer, msg| {
                             trace!("will push to network [{:?}]", msg);
