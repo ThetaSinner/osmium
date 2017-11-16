@@ -49,4 +49,8 @@ impl ConnectionSharedState {
             self.highest_started_processing_stream_id = stream_id;
         }
     }
+
+    pub fn get_highest_started_processing_stream_id(&self) -> framing::StreamId {
+        self.highest_started_processing_stream_id
+    }
 }

@@ -140,8 +140,6 @@ impl<T, R, S> Server<T, R, S>
                                 shutdown_signal::ShutdownSignaller::new(shutdown_read_tx)
                             );
 
-                            // TODO (goaway) When the read loop shuts down, the other end of this channel is destroyed so this iterator
-                            // SHOULD end... I hope.
                             let mut msg_iter = rx.iter();
                             while let Some(msg) = msg_iter.next() {
                                 connection.push_frame(
@@ -164,6 +162,8 @@ impl<T, R, S> Server<T, R, S>
                                     }
                                 }
                             }
+
+                            println!("about to drop connection");
 
                             // TODO (goaway) The loop has exited (again, hopefully) so check for send frames and figure out how to
                             // keep the send loop alive long enough to make sure the goaway frame has sent.

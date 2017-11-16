@@ -57,6 +57,7 @@ pub struct Connection<'a> {
 
     highest_remote_initiated_stream_identifier: framing::StreamId,
 
+    shutdown_initiated: bool,
     shutdown_signaller: shutdown_signal::ShutdownSignaller,
 
     send_window: u32,
@@ -81,6 +82,7 @@ impl<'a> Connection<'a> {
             promised_streams_queue: VecDeque::new(),
             connection_shared_state: Rc::new(RefCell::new(connection_shared_state::ConnectionSharedState::new())),
             highest_remote_initiated_stream_identifier: 0,
+            shutdown_initiated: false,
             shutdown_signaller: shutdown_signaller,
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
@@ -100,6 +102,14 @@ impl<'a> Connection<'a> {
     {
         log_conn_frame!("Receive frame", frame);
 
+        // TODO if rust adds exceptions, then this can be redone.
+        // This is slightly untidy, and is essentially a side effect of not having exceptions in Rust. The read write loop in the
+        // net code could be immediately terminated with an exception. As things stand, this is the cleanest way to handle shutdown.
+        if self.shutdown_initiated {
+            info!("The connection is shutting down, so this frame will be discarded with no processing");
+            return;
+        }
+
         // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),
@@ -114,7 +124,7 @@ impl<'a> Connection<'a> {
             // (6.2) A receiver MUST treat the receipt of any other type of frame 
             // or a frame on a different stream as a connection error (Section 5.4.1) 
             // of type PROTOCOL_ERROR.
-            self.push_send_go_away_frame(error::HttpError::ConnectionError(
+            self.shutdown_connection(error::HttpError::ConnectionError(
                 error::ErrorCode::ProtocolError,
                 error::ErrorName::HeaderBlockInterupted
             ));
@@ -125,7 +135,7 @@ impl<'a> Connection<'a> {
             framing::FrameType::Ping => {
                 // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
                 if frame.header.stream_id != 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::StreamIdentifierOnConnectionFrame
                     ));
@@ -159,14 +169,14 @@ impl<'a> Connection<'a> {
                     Err(e) => {
                         // (6.7) the only error which decoding can produce is a FRAME_SIZE_ERROR, which is a connection error
                         // so it is correct to build a GO_AWAY frame from it.
-                        self.push_send_go_away_frame(e);
+                        self.shutdown_connection(e);
                     }
                 }
             },
             framing::FrameType::Headers => {
                 // (6.2) A HEADERS frame which is not associated with a stream is a connection error of type PROTOCOL_ERROR
                 if frame.header.stream_id == 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
                     ));
@@ -177,7 +187,7 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::Data => {
                 if frame.header.stream_id == 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
                     ));
@@ -195,7 +205,7 @@ impl<'a> Connection<'a> {
                     // TODO handle frame decode error.
 
                     if window_update_frame.get_window_size_increment() == 0 {
-                        self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                        self.shutdown_connection(error::HttpError::ConnectionError(
                             error::ErrorCode::ProtocolError,
                             error::ErrorName::ZeroWindowSizeIncrement
                         ));
@@ -211,7 +221,7 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::Priority => {
                 if frame.header.stream_id == 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         // TODO this means a client using this error as a debug message won't know which frame caused a problem
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
@@ -224,7 +234,7 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::Settings => {
                 if frame.header.stream_id != 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         // TODO this means a client using this error as a debug message won't know which frame caused a problem
                         error::ErrorName::StreamIdentifierOnConnectionFrame
@@ -251,7 +261,7 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::ResetStream => {
                 if frame.header.stream_id == 0x0 {
-                    self.push_send_go_away_frame(error::HttpError::ConnectionError(
+                    self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
                     ));
@@ -271,6 +281,13 @@ impl<'a> Connection<'a> {
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
+        if self.shutdown_initiated {
+            info!("Connection is shutting down, so any remaining promises will be ignored");
+            // TODO document this boolean return value.
+            // Tell the caller there are no more promises to execute.
+            return false;
+        }
+
         if let Some(promised_stream_id) = self.promised_streams_queue.pop_back() {
             let mut temp_streams = Vec::new();
             {
@@ -486,12 +503,21 @@ impl<'a> Connection<'a> {
         );
     }
 
-    fn push_send_go_away_frame(&mut self, http_error: error::HttpError) {
-        // TODO handle close connection after this is queued.
+    fn shutdown_connection(&mut self, http_error: error::HttpError) {
+        // There are a few things that can't be prevented. For example, if the frame that caused the error took some time to
+        // process then other frames may have arrived and been queued for processing. This field provides a way to check
+        // if the connection is shutting down and ignore subsequent frames.
+        self.shutdown_initiated = true;
 
-        // TODO send last stream processed. Steams are not implemented yet so this will have to wait. For now send
-        // 0x0, which means no streams processed.
-        let go_away = framing::go_away::GoAwayFrameCompressModel::new(0x0, http_error);
+        // This sends a signal to the net code that the connection needs to be shut down.
+        self.shutdown_signaller.signal_shutdown();
+
+        // This builds the goaway frame with information about the error and the progress on processing requests.
+        // Additional data can be included on a goaway, this is done using the error detail enum.
+        let go_away = framing::go_away::GoAwayFrameCompressModel::new(
+            self.connection_shared_state.borrow().get_highest_started_processing_stream_id(),
+            http_error
+        );
 
         // (6.8) A GOAWAY frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR.
         self.push_send_frame(Box::new(go_away), 0x0);
@@ -537,7 +563,7 @@ impl<'a> Connection<'a> {
                         _ => {
                             // (6.5.2) Any value other than 0 or 1 MUST be treated as a connection 
                             // error (Section 5.4.1) of type PROTOCOL_ERROR.
-                            self.push_send_go_away_frame(
+                            self.shutdown_connection(
                                 error::HttpError::ConnectionError(
                                     error::ErrorCode::ProtocolError,
                                     error::ErrorName::EnablePushSettingInvalidValue
@@ -567,7 +593,7 @@ impl<'a> Connection<'a> {
                     else {
                         // (6.5.2) Values above the maximum flow-control window size of 231-1 MUST be treated as a 
                         // connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR.
-                        self.push_send_go_away_frame(
+                        self.shutdown_connection(
                             error::HttpError::ConnectionError(
                                 error::ErrorCode::ProtocolError,
                                 error::ErrorName::InvalidInitialWindowSize
@@ -592,7 +618,7 @@ impl<'a> Connection<'a> {
                         // (6.5.2) The initial value is 214 (16,384) octets. The value advertised by an endpoint MUST be between this initial 
                         // value and the maximum allowed frame size (224-1 or 16,777,215 octets), inclusive. Values outside this range MUST 
                         // be treated as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
-                        self.push_send_go_away_frame(
+                        self.shutdown_connection(
                             error::HttpError::ConnectionError(
                                 error::ErrorCode::ProtocolError,
                                 error::ErrorName::InvalidMaxFrameSize
@@ -622,7 +648,7 @@ impl<'a> Connection<'a> {
     fn handle_flow_control_for_recv(&mut self, size: u32) {
         // Check if the sender was allowed to send a payload this size.
         if size > self.receive_window {
-            self.push_send_go_away_frame(error::HttpError::ConnectionError(
+            self.shutdown_connection(error::HttpError::ConnectionError(
                 error::ErrorCode::FlowControlError,
                 error::ErrorName::ConnectionFlowControlWindowNotRespected
             ));
