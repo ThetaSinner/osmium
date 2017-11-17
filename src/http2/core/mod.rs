@@ -37,10 +37,6 @@ use shared::server_trait;
 use http2::settings;
 use http2::net::shutdown_signal;
 
-// TODO (goaway) This connection struct doesn't have a unified way of processing frames on send. Need to look at
-// how goaway frames are sent, from here and from streams. When a goaway is sent the net code needs to start shutdown
-// and stop processing.
-
 pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
     frame_state_validator: connection_frame_state::ConnectionFrameStateValidator,
@@ -94,8 +90,7 @@ impl<'a> Connection<'a> {
         new_con
     }
 
-    // TODO rename to recv.
-    pub fn push_frame<T, R, S>(&mut self, frame: framing::Frame, app: &T)
+    pub fn recv<T, R, S>(&mut self, frame: framing::Frame, app: &T)
         where T: server_trait::OsmiumServer<Request=R, Response=S>,
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
@@ -494,6 +489,7 @@ impl<'a> Connection<'a> {
         }
     }
 
+    /// N.B. GoAway frames sent directly to this method will not end the connection. Use `shutdown_connection` instead.
     // Queues a frame to be sent.
     fn push_send_frame(&mut self, frame: Box<framing::CompressibleHttpFrame>, stream_id: framing::StreamId) {
         log_conn_send_frame!("Pushing frame for send", frame);

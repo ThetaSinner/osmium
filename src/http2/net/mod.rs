@@ -142,7 +142,7 @@ impl<T, R, S> Server<T, R, S>
 
                             let mut msg_iter = rx.iter();
                             while let Some(msg) = msg_iter.next() {
-                                connection.push_frame(
+                                connection.recv(
                                     framing::Frame {
                                         header: msg.0,
                                         payload: msg.1
