@@ -802,7 +802,7 @@ impl ConnectionHandle for Stream {
     fn is_push_enabled(&self) -> bool {
         // TODO modify the stream to understand that it is a synthetic stream, and do not allow promises to be sent in that case.
         // TODO test that updating server push setting while running actually updates this value.
-        self.connection_shared_state.borrow().incoming_settings.enable_push
+        self.connection_shared_state.borrow().remote_settings.enable_push
     }
 
     fn push_promise(&mut self, request: StreamRequest) -> Option<push_error::PushError> {

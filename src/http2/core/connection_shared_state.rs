@@ -20,8 +20,7 @@ use http2::settings;
 use http2::frame as framing;
 
 pub struct ConnectionSharedState {
-    // TODO rename to remote settings
-    pub incoming_settings: settings::Settings,
+    pub remote_settings: settings::Settings,
     next_server_created_stream_id: framing::StreamId,
     // If streams were ever made concurrent it would be VITAL that this is locked. It is used to communicate to
     // the client which streams have started processing, or at least the highest numbered one. That means no more
@@ -32,7 +31,7 @@ pub struct ConnectionSharedState {
 impl ConnectionSharedState {
     pub fn new() -> Self {
         ConnectionSharedState {
-            incoming_settings: settings::Settings::spec_default(),
+            remote_settings: settings::Settings::spec_default(),
             next_server_created_stream_id: 2,
             highest_started_processing_stream_id: 0
         }

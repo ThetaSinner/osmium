@@ -543,22 +543,22 @@ impl<'a> Connection<'a> {
                     // in the next header block.
 
                     // TODO Currently, this saves the current value, but probably isn't necesary.
-                    self.connection_shared_state.borrow_mut().incoming_settings.header_table_size = setting.get_value();
+                    self.connection_shared_state.borrow_mut().remote_settings.header_table_size = setting.get_value();
 
                     // Inform the send context that the max size setting has changed.
-                    self.hpack_send_context.inform_max_size_setting_changed(self.connection_shared_state.borrow().incoming_settings.header_table_size);
+                    self.hpack_send_context.inform_max_size_setting_changed(self.connection_shared_state.borrow().remote_settings.header_table_size);
                 },
                 &settings::SettingName::SettingsEnablePush => {
                     match setting.get_value() {
                         0 => {
                             // TODO when push promise is disabled remotely then any streams which
                             // are reserved remote need to be reset.
-                            self.connection_shared_state.borrow_mut().incoming_settings.enable_push = false;
+                            self.connection_shared_state.borrow_mut().remote_settings.enable_push = false;
                         },
                         1 => {
                             // There is nothing to be done when this setting is switched on. The next
                             // time the application wants to push promise it will be enabled.
-                            self.connection_shared_state.borrow_mut().incoming_settings.enable_push = true;
+                            self.connection_shared_state.borrow_mut().remote_settings.enable_push = true;
                         },
                         _ => {
                             // (6.5.2) Any value other than 0 or 1 MUST be treated as a connection 
@@ -578,13 +578,13 @@ impl<'a> Connection<'a> {
                     // TODO need to refuse to open new streams if it would exceed the remote limit (for a server this is just limiting the number of push promises)
                     // TODO need to send reset stream with stream refused if the client exceeds the limit we've set. If the client continues to try to open streams
                     // very quickly while open streams are sill being processed then we can send reset with enhance your calm :)
-                    self.connection_shared_state.borrow_mut().incoming_settings.max_concurrent_streams = Some(setting.get_value());
+                    self.connection_shared_state.borrow_mut().remote_settings.max_concurrent_streams = Some(setting.get_value());
                 },
                 &settings::SettingName::SettingsInitialWindowSize => {
                     let val = setting.get_value();
 
                     if val <= settings::MAXIMUM_FLOW_CONTROL_WINDOW_SIZE {
-                        self.connection_shared_state.borrow_mut().incoming_settings.initial_window_size = val;
+                        self.connection_shared_state.borrow_mut().remote_settings.initial_window_size = val;
 
                         // This is the window size that new streams will use.
 
@@ -612,7 +612,7 @@ impl<'a> Connection<'a> {
                         // setting value, at which point we need to trigger and event to check all responses blocked for this reason.
                         // TODO handle the local side of the above, if we can't receive a payload make a decision about whether
                         // to increase this setting to allow the remote to send its payload.
-                        self.connection_shared_state.borrow_mut().incoming_settings.max_frame_size = val;
+                        self.connection_shared_state.borrow_mut().remote_settings.max_frame_size = val;
                     }
                     else {
                         // (6.5.2) The initial value is 214 (16,384) octets. The value advertised by an endpoint MUST be between this initial 
@@ -630,7 +630,7 @@ impl<'a> Connection<'a> {
                 },
                 &settings::SettingName::SettingsMaxHeaderListSize => {
                     // TODO no idea how to handle exceeding this limit on send.
-                    self.connection_shared_state.borrow_mut().incoming_settings.max_header_list_size = Some(setting.get_value());
+                    self.connection_shared_state.borrow_mut().remote_settings.max_header_list_size = Some(setting.get_value());
                 }
             }
         }
