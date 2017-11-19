@@ -16,33 +16,34 @@
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 use super::h2handshake::{self, HandshakeCompletion, HandshakeError};
-use super::openssl_helper;
+use super::acceptor_factory;
 
 use futures::future::{self, Future};
-use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_core::net as tokio_net;
 use std::io;
 use tokio_io;
-use tokio_openssl::{SslAcceptorExt, SslStream};
+use tokio_openssl::SslAcceptorExt;
 use http2::frame::{self as framing, CompressibleHttpFrame};
-use shared::server_settings::SecuritySettings;
 
 const PREFACE: [u8; 24] = [0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a];
 
 pub struct HttpsH2Handshake {
+    acceptor_factory: acceptor_factory::AcceptorFactory
 }
 
 impl HttpsH2Handshake {
-    pub fn new() -> Self {
+    pub fn new(acceptor_factory: acceptor_factory::AcceptorFactory) -> Self {
         HttpsH2Handshake {
+            acceptor_factory: acceptor_factory
         }
     }
 }
 
-impl h2handshake::H2Handshake for HttpsH2Handshake {
-    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>, security_settings: &SecuritySettings) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
-        where S: AsyncRead + AsyncWrite + 'static
+impl h2handshake::H2Handshake for HttpsH2Handshake
+{
+    fn attempt_handshake(&self, stream: tokio_net::TcpStream, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion, HandshakeError>, Error = io::Error>>
     {
-        let acceptor = openssl_helper::make_acceptor(security_settings);
+        let acceptor = self.acceptor_factory.make_acceptor();
 
         Box::new(
             acceptor.accept_async(stream)
@@ -57,7 +58,7 @@ impl h2handshake::H2Handshake for HttpsH2Handshake {
             .and_then(|(stream, buf)| {
                 if buf == PREFACE {
                     let header_buf = [0; 9];
-                    let handshake_settings_future: Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>> = 
+                    let handshake_settings_future: Box<Future<Item = future::FutureResult<HandshakeCompletion, HandshakeError>, Error = io::Error>> = 
                     Box::new(
                         tokio_io::io::read_exact(stream, header_buf)
                         .and_then(|(stream, buf)| {

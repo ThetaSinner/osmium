@@ -17,7 +17,7 @@
 
 pub mod h2handshake;
 pub mod https;
-pub mod openssl_helper;
+pub mod acceptor_factory;
 pub mod shutdown_signal;
 
 // std
@@ -76,8 +76,7 @@ impl<T, R, S> Server<T, R, S>
     // The start method consumes self so that it can ensure it can be used on the connection threads.
     // The connection threads take a closure which must have static lifetime. If server startup 
     // succeeds, then the a shared pointer to self is returned.
-    pub fn start_server<H>(self, handshake: H) -> Arc<Box<Self>> 
-        where H: h2handshake::H2Handshake
+    pub fn start_server(self) -> Arc<Box<Self>>
     {
         // tokio event loop
         let mut event_loop = tokio_core::reactor::Core::new().unwrap();
@@ -88,6 +87,11 @@ impl<T, R, S> Server<T, R, S>
         let listener = tokio_core::net::TcpListener::bind(&addr, &handle).unwrap();
 
         let thread_pool = Rc::new(ThreadPool::new(10));
+
+        let acceptor_factory = acceptor_factory::AcceptorFactory::new(&self.server_settings.get_security());
+
+        // TODO this should vary depending on the startup type chosen (http/https)
+        let handshake: Box<self::h2handshake::H2Handshake> = Box::new(https::HttpsH2Handshake::new(acceptor_factory));
 
         let server_instance = Arc::new(Box::new(self));
 
@@ -105,7 +109,7 @@ impl<T, R, S> Server<T, R, S>
             settings_response.add_parameter(settings::SettingName::SettingsInitialWindowSize, 131072);
             settings_response.add_parameter(settings::SettingName::SettingsMaxFrameSize, 16384);
 
-            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response), server_instance.server_settings.get_security())
+            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
             })
@@ -338,11 +342,9 @@ mod tests {
     // MANUAL TESTING #[test]
     fn test_start_server() {
         println!("start server");
-        let handshake = https::HttpsH2Handshake::new();
-
         let mut settings = server_settings::ServerSettings::default();
         settings.set_security(server_settings::SecuritySettings::default());
 
-        Server::new(MyServer {}, settings).start_server(handshake);
+        Server::new(MyServer {}, settings).start_server();
     }
 }

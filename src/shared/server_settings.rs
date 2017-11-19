@@ -68,6 +68,11 @@ impl ServerSettings {
         self.port
     }
 
+    // TODO this whole feature is a bit messy now.
+    pub fn is_use_security(&self) -> bool {
+        self.security.is_some()
+    }
+
     pub fn get_security(&self) -> &SecuritySettings {
         if let Some(ref security) = self.security {
             return security;

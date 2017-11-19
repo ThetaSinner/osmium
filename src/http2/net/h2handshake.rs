@@ -16,28 +16,28 @@
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
 use futures::future::{self, Future};
-use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_core::net as tokio_net;
 use std::io;
 use tokio_openssl::SslStream;
 use http2::frame as framing;
-use shared::server_settings::SecuritySettings;
+
+// Sadly rust doesn't completely support generic traits. To keep the code simpler this is naming the transport directly.
+// It would be nice if the code at this level wasn't tied to the underlying transport but the traits needed are in tokio_io
+// anyway so...
 
 pub trait H2Handshake {
-    fn attempt_handshake<S>(&self, stream: S, settings_response: Box<framing::settings::SettingsFrameCompressModel>, security_settings: &SecuritySettings) -> Box<Future<Item = future::FutureResult<HandshakeCompletion<SslStream<S>>, HandshakeError<SslStream<S>>>, Error = io::Error>>
-        where S: AsyncRead + AsyncWrite + 'static;
+    fn attempt_handshake(&self, stream: tokio_net::TcpStream, settings_response: Box<framing::settings::SettingsFrameCompressModel>) -> Box<Future<Item = future::FutureResult<HandshakeCompletion, HandshakeError>, Error = io::Error>>;
 }
 
 #[derive(Debug)]
-pub struct HandshakeCompletion<S>
-    where S: AsyncRead + AsyncWrite
+pub struct HandshakeCompletion
 {
-    pub stream: S,
+    pub stream: SslStream<tokio_net::TcpStream>,
     pub settings_frame: framing::settings::SettingsFrame
 }
 
 #[derive(Debug)]
-pub enum HandshakeError<S>
-    where S: AsyncRead + AsyncWrite
+pub enum HandshakeError
 {
-    DidNotUpgrade(S, Vec<u8>)
+    DidNotUpgrade(SslStream<tokio_net::TcpStream>, Vec<u8>)
 }

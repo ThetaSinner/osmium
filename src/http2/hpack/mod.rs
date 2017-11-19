@@ -129,7 +129,7 @@ impl HPack {
 
 #[cfg(test)]
 mod tests {
-    use super::{HPack, pack, unpack, context};
+    use super::{HPack, pack, unpack};
     use http2::hpack::context::ContextTrait;
     use http2::header;
 

@@ -223,6 +223,5 @@ fn main() {
     security.set_ssl_cert_path(String::from("../../../tests/cert.pfx"));
     settings.set_security(security);
 
-    let handshake = net::https::HttpsH2Handshake::new();
-    net::Server::new(MyServer {}, settings).start_server(handshake);
+    net::Server::new(MyServer {}, settings).start_server();
 }
