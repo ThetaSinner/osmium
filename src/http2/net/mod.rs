@@ -42,7 +42,7 @@ use std::convert;
 
 // osmium
 use http2::frame as framing;
-use http2::core;
+use http2::core::connection;
 use http2::hpack;
 use shared::server_trait;
 use http2::stream as streaming;
@@ -137,7 +137,7 @@ impl<T, R, S> Server<T, R, S>
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
-                            let mut connection = core::Connection::new(
+                            let mut connection = connection::Connection::new(
                                 server_instance.hpack.new_send_context(),
                                 server_instance.hpack.new_recv_context(),
                                 temp_frame,
