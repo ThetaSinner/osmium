@@ -128,7 +128,7 @@ impl HPack {
 
 #[cfg(test)]
 mod tests {
-    use super::{HPack, pack, unpack};
+    use super::{HPack, pack, unpack, STATIC_TABLE_LENGTH};
     use http2::hpack::context::ContextTrait;
     use http2::header;
 
@@ -172,12 +172,33 @@ mod tests {
         }
     }
 
+    // Note that the field name is converted to lower case. See http2::header for more.
     fn assert_table_entry<'a, T: ContextTrait<'a>>(context: &T, index: usize, name: &str, value: &str) {
         let dynamic_table_entry = context.get(index);
         assert!(dynamic_table_entry.is_some());
         let field = dynamic_table_entry.unwrap();
-        assert_eq!(name, &field.name);
+        assert_eq!(name, &field.name.to_lowercase());
         assert_eq!(value, &field.value);
+    }
+
+    fn assert_contexts_equal<'a, 'b, T: ContextTrait<'a>, S: ContextTrait<'b>>(expected_context: &T, actual_context: &S) {
+        let mut index = STATIC_TABLE_LENGTH;
+
+        // Checking the sizes first, as it makes it more likely the method will exit on an assert rather
+        // than an index out of bounds below.
+        assert_eq!(expected_context.size(), actual_context.size());
+
+        loop {
+            let entry = expected_context.get(index);
+
+            if let Some(ref entry) = entry {
+                assert_table_entry(actual_context, index, entry.name.to_lowercase().as_ref(), entry.value.as_ref());
+                index += 1;
+            }
+            else {
+                break;
+            }
+        }
     }
 
     // See C.2.1 encode
@@ -202,15 +223,14 @@ mod tests {
     #[test]
     pub fn decode_custom_header() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
-
         headers.push(
             header::HeaderName::CustomHeader(String::from("custom-key")),
             header::HeaderValue::Str(String::from("custom-header"))
         );
 
+        let mut encoding_context = hpack.new_send_context();
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
@@ -222,6 +242,8 @@ mod tests {
         // assert the dynamic table.
         assert_eq!(55, decoding_context.size());
         assert_table_entry(&decoding_context, 62, "custom-key", "custom-header");
+
+        assert_contexts_equal(&decoding_context, &encoding_context);
     }
 
     // See C.2.2 encode
@@ -246,15 +268,14 @@ mod tests {
     #[test]
     pub fn decode_literal_field_without_indexing() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
-
         headers.push(
             header::HeaderName::PseudoPath,
             header::HeaderValue::Str(String::from("/sample/path"))
         );
 
+        let mut encoding_context = hpack.new_send_context();
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
@@ -265,6 +286,8 @@ mod tests {
         
         // assert the dynamic table.
         assert_eq!(0, decoding_context.size());
+
+        assert_contexts_equal(&decoding_context, &encoding_context);
     }
 
     // TODO this uses the do not compress route to never indexed, add a test which
@@ -295,7 +318,6 @@ mod tests {
     #[test]
     pub fn decode_literal_field_never_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -304,9 +326,9 @@ mod tests {
             header::HeaderValue::Str(String::from("secret"))
         );
         secret_password_header.set_allow_compression(false);
-
         headers.push_header(secret_password_header);
 
+        let mut encoding_context = hpack.new_send_context();
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
@@ -317,6 +339,8 @@ mod tests {
         
         // assert the dynamic table.
         assert_eq!(0, decoding_context.size());
+
+        assert_contexts_equal(&decoding_context, &encoding_context);
     }
 
     // See C.2.4 encode
@@ -343,7 +367,6 @@ mod tests {
     #[test]
     pub fn decode_indexed() {
         let hpack = HPack::new();
-        let mut encoding_context = hpack.new_send_context();
 
         let mut headers = header::Headers::new();
 
@@ -351,9 +374,9 @@ mod tests {
             header::HeaderName::PseudoMethod,
             header::HeaderValue::Str(String::from("GET"))
         );
-
         headers.push_header(method_get_header);
 
+        let mut encoding_context = hpack.new_send_context();
         let encoded = pack::pack(&headers, &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
@@ -364,10 +387,9 @@ mod tests {
         
         // assert the dynamic table.
         assert_eq!(0, decoding_context.size());
-    }
 
-    // TODO the tests above should assert the encoding context as well as the decoding context
-    // to ensure they match.
+        assert_contexts_equal(&decoding_context, &encoding_context);
+    }
 
     fn section_c_three_and_four_requests(
         use_huffman_coding: bool,
@@ -413,10 +435,7 @@ mod tests {
             assert_eq!(57, decoding_context.size());
             assert_table_entry(&decoding_context, 62, ":authority", "www.example.com");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, ":authority", "www.example.com");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
 
         // Request 2
@@ -456,11 +475,7 @@ mod tests {
             assert_table_entry(&decoding_context, 62, "cache-control", "no-cache");
             assert_table_entry(&decoding_context, 63, ":authority", "www.example.com");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, "Cache-Control", "no-cache");
-            assert_table_entry(&encoding_context, 63, ":authority", "www.example.com");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
 
         // Third request
@@ -501,12 +516,7 @@ mod tests {
             assert_table_entry(&decoding_context, 63, "cache-control", "no-cache");
             assert_table_entry(&decoding_context, 64, ":authority", "www.example.com");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, "custom-key", "custom-value");
-            assert_table_entry(&encoding_context, 63, "Cache-Control", "no-cache");
-            assert_table_entry(&encoding_context, 64, ":authority", "www.example.com");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
     }
 
@@ -583,13 +593,7 @@ mod tests {
             assert_table_entry(&decoding_context, 64, "cache-control", "private");
             assert_table_entry(&decoding_context, 65, ":status", "302");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, "Location", "https://www.example.com");
-            assert_table_entry(&encoding_context, 63, "Date", "Mon, 21 Oct 2013 20:13:21 GMT");
-            assert_table_entry(&encoding_context, 64, "Cache-Control", "private");
-            assert_table_entry(&encoding_context, 65, ":status", "302");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
 
         // Response 2
@@ -629,13 +633,7 @@ mod tests {
             assert_table_entry(&decoding_context, 64, "date", "Mon, 21 Oct 2013 20:13:21 GMT");
             assert_table_entry(&decoding_context, 65, "cache-control", "private");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, ":status", "307");
-            assert_table_entry(&encoding_context, 63, "Location", "https://www.example.com");
-            assert_table_entry(&encoding_context, 64, "Date", "Mon, 21 Oct 2013 20:13:21 GMT");
-            assert_table_entry(&encoding_context, 65, "Cache-Control", "private");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
 
         // Response 3
@@ -682,12 +680,7 @@ mod tests {
             assert_table_entry(&decoding_context, 63, "content-encoding", "gzip");
             assert_table_entry(&decoding_context, 64, "date", "Mon, 21 Oct 2013 20:13:22 GMT");
 
-            // assert that the encoding context is the same as the decoding context
-            // TODO extract function.
-            assert_eq!(decoding_context.size(), encoding_context.size());
-            assert_table_entry(&encoding_context, 62, "Set-Cookie", "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1");
-            assert_table_entry(&encoding_context, 63, "Content-Encoding", "gzip");
-            assert_table_entry(&encoding_context, 64, "Date", "Mon, 21 Oct 2013 20:13:22 GMT");
+            assert_contexts_equal(&decoding_context, &encoding_context);
         }
     }
 

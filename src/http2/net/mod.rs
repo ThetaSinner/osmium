@@ -270,7 +270,6 @@ impl<T, R, S> Server<T, R, S>
 #[cfg(test)]
 mod tests {
     use super::Server;
-    use super::https;
 
     use http2::header;
     use http2::stream as streaming;

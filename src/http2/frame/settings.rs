@@ -191,7 +191,7 @@ fn example_payload() {
     };
     
     // This is the settings payload the curl sends on with an http2 upgrade request.
-    let mut payload = vec![0, 3, 0, 0, 0, 100, 0, 4, 64, 0, 0, 0, 0, 2, 0, 0, 0, 0];
+    let payload = vec![0, 3, 0, 0, 0, 100, 0, 4, 64, 0, 0, 0, 0, 2, 0, 0, 0, 0];
 
     let decoded = SettingsFrame::new(&header, &mut payload.into_iter());
 
