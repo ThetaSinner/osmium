@@ -18,6 +18,9 @@
 // std
 use std::fmt;
 
+// TODO this file is not being used, it was needed when the project was attempting to run http and http2. That's not
+// the direction it's going in, so this file could be removed.
+
 #[derive(Debug)]
 pub enum HttpVersion {
     Http10,

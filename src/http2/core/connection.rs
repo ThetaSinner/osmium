@@ -80,8 +80,7 @@ impl<'a> Connection<'a> {
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };
-
-        // TODO this might queue a go_away, the net code needs to check the startup was okay and close the connection otherwise.
+        
         new_con.apply_settings(initial_settings, false);
 
         new_con

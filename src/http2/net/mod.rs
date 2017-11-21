@@ -144,6 +144,9 @@ impl<T, R, S> Server<T, R, S>
                                 shutdown_signal::ShutdownSignaller::new(shutdown_read_tx)
                             );
 
+                            // Note that if the initial settings contain an error the connection will immediately initiate shutdown.
+                            // The documentation for iter() on a receiver states that it will never panic, just yield None when the 
+                            // sender has hung up.
                             let mut msg_iter = rx.iter();
                             while let Some(msg) = msg_iter.next() {
                                 connection.recv(
