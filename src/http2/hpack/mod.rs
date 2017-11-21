@@ -41,8 +41,8 @@ pub struct HPack {
 
 impl HPack {
     /// Creates a new `HPack` instance. 
-    /// This method builds an instance of the predefined static table to be 
-    /// provided to contexts created from this structure.
+    /// This method builds an instance of the predefined static table to be
+    /// provided to send/receive contexts created from this instance.
     pub fn new() -> Self {
         let mut static_table = Table::new();
         
@@ -115,13 +115,12 @@ impl HPack {
         }
     }
 
-    /// Create a new `Context` structure with a reference to the static table owned by this 
-    /// `HPack` instance.
-    // TODO update docs.
+    /// Get a new `SendContext` instance.
     pub fn new_send_context(&self) -> SendContext {
         SendContext::new(&self.static_table)
     }
 
+    /// Get a new `RecvContext` instance.
     pub fn new_recv_context(&self) -> RecvContext {
         RecvContext::new(&self.static_table)
     }
