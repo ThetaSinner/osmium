@@ -80,7 +80,7 @@ impl<'a> Connection<'a> {
             send_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE,
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };
-        
+
         new_con.apply_settings(initial_settings, false);
 
         new_con
@@ -93,7 +93,6 @@ impl<'a> Connection<'a> {
     {
         log_conn_frame!("Receive frame", frame);
 
-        // TODO if rust adds exceptions, then this can be redone.
         // This is slightly untidy, and is essentially a side effect of not having exceptions in Rust. The read write loop in the
         // net code could be immediately terminated with an exception. As things stand, this is the cleanest way to handle shutdown.
         if self.shutdown_initiated {
