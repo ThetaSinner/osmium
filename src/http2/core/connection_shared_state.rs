@@ -17,15 +17,15 @@
 
 // osmium
 use http2::settings;
-use http2::frame as framing;
+use http2::stream::StreamId;
 
 pub struct ConnectionSharedState {
     pub remote_settings: settings::Settings,
-    next_server_created_stream_id: framing::StreamId,
+    next_server_created_stream_id: StreamId,
     // If streams were ever made concurrent it would be VITAL that this is locked. It is used to communicate to
     // the client which streams have started processing, or at least the highest numbered one. That means no more
     // streams may start processing once this has been sent.
-    highest_started_processing_stream_id: framing::StreamId
+    highest_started_processing_stream_id: StreamId
 }
 
 impl ConnectionSharedState {
@@ -43,13 +43,13 @@ impl ConnectionSharedState {
         id
     }
 
-    pub fn notify_processing_started_on_stream(&mut self, stream_id: framing::StreamId) {
+    pub fn notify_processing_started_on_stream(&mut self, stream_id: StreamId) {
         if stream_id > self.highest_started_processing_stream_id {
             self.highest_started_processing_stream_id = stream_id;
         }
     }
 
-    pub fn get_highest_started_processing_stream_id(&self) -> framing::StreamId {
+    pub fn get_highest_started_processing_stream_id(&self) -> StreamId {
         self.highest_started_processing_stream_id
     }
 }

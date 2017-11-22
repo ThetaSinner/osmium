@@ -17,6 +17,7 @@
 
 // osmium
 use http2::frame as framing;
+use http2::stream::StreamId;
 
 pub struct ConnectionFrameStateValidator {
     name: ConnectionFrameStateName
@@ -33,7 +34,7 @@ impl ConnectionFrameStateValidator {
     // a CONTINUATION frame for the same stream. A receiver MUST treat the 
     // receipt of any other type of frame or a frame on a different stream 
     // as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
-    pub fn is_okay(&mut self, frame_type: framing::FrameType, flags: u8, stream_id: framing::StreamId) -> bool {
+    pub fn is_okay(&mut self, frame_type: framing::FrameType, flags: u8, stream_id: StreamId) -> bool {
         let (new_name, okay) = match self.name {
             ConnectionFrameStateName::AllowAny(ref s) => {
                 if frame_type == framing::FrameType::Headers && !framing::headers::is_end_headers(flags) {
@@ -92,7 +93,7 @@ impl ConnectionFrameState<StateAllowAny> {
 }
 
 impl ConnectionFrameState<StateReceiveContinuation> {
-    pub fn get_stream_id(&self) -> framing::StreamId {
+    pub fn get_stream_id(&self) -> StreamId {
         self.state.stream_id
     }
 }
@@ -100,11 +101,11 @@ impl ConnectionFrameState<StateReceiveContinuation> {
 pub struct StateAllowAny;
 
 pub struct StateReceiveContinuation {
-    stream_id: framing::StreamId
+    stream_id: StreamId
 }
 
-impl<'a> From<(&'a ConnectionFrameState<StateAllowAny>, framing::StreamId)> for ConnectionFrameState<StateReceiveContinuation> {
-    fn from(val: (&ConnectionFrameState<StateAllowAny>, framing::StreamId)) -> ConnectionFrameState<StateReceiveContinuation> {
+impl<'a> From<(&'a ConnectionFrameState<StateAllowAny>, StreamId)> for ConnectionFrameState<StateReceiveContinuation> {
+    fn from(val: (&ConnectionFrameState<StateAllowAny>, StreamId)) -> ConnectionFrameState<StateReceiveContinuation> {
         ConnectionFrameState {
             state: StateReceiveContinuation {
                 stream_id: val.1

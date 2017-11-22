@@ -37,9 +37,7 @@ use std::fmt;
 
 // osmium
 pub use self::data::DataFrame;
-
-// TODO find a place for this
-pub type StreamId = u32;
+use http2::stream::StreamId;
 
 pub trait CompressibleHttpFrame: fmt::Debug {
     fn get_length(&self) -> i32;

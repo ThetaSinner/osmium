@@ -39,6 +39,9 @@ use shared::connection_handle::ConnectionHandle;
 use http2::core::connection_shared_state::ConnectionSharedState;
 use shared::push_error;
 
+/// Convenience typedef for stream identifiers.
+pub type StreamId = u32;
+
 // TODO break this file up!
 
 // TODO can/should any of this data be moved into the state machine?
@@ -54,7 +57,7 @@ use shared::push_error;
 // same if it chooses. While waiting to kill the connection, should push promise be disabled?
 
 pub struct Stream {
-    id: framing::StreamId,
+    id: StreamId,
 
     state_name: state::StreamStateName,
 
@@ -78,7 +81,7 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(id: framing::StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>) -> Self {
+    pub fn new(id: StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>) -> Self {
         Stream {
             id: id,
 
@@ -104,7 +107,7 @@ impl Stream {
         }
     }
 
-    pub fn new_promise(id: framing::StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>, request: StreamRequest) -> Self {
+    pub fn new_promise(id: StreamId, connection_shared_state: Rc<RefCell<ConnectionSharedState>>, request: StreamRequest) -> Self {
         let mut promised_stream = Stream::new(id, connection_shared_state);
 
         promised_stream.state_name = if let state::StreamStateName::Idle(ref state) = promised_stream.state_name {

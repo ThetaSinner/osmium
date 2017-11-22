@@ -24,7 +24,7 @@ use std::rc::Rc;
 // osmium
 use http2::frame as framing;
 use http2::error;
-use http2::stream as streaming;
+use http2::stream::{self as streaming, StreamId};
 use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
@@ -41,14 +41,14 @@ pub struct Connection<'a> {
     hpack_send_context: hpack_context::SendContext<'a>,
     hpack_recv_context: hpack_context::RecvContext<'a>,
 
-    streams: HashMap<framing::StreamId, streaming::Stream>,
+    streams: HashMap<StreamId, streaming::Stream>,
     stream_blocker: stream_blocker::StreamBlocker,
 
-    promised_streams_queue: VecDeque<framing::StreamId>,
+    promised_streams_queue: VecDeque<StreamId>,
 
     connection_shared_state: Rc<RefCell<connection_shared_state::ConnectionSharedState>>,
 
-    highest_remote_initiated_stream_identifier: framing::StreamId,
+    highest_remote_initiated_stream_identifier: StreamId,
 
     shutdown_initiated: bool,
     shutdown_signaller: shutdown_signal::ShutdownSignaller,
@@ -486,7 +486,7 @@ impl<'a> Connection<'a> {
 
     /// N.B. GoAway frames sent directly to this method will not end the connection. Use `shutdown_connection` instead.
     // Queues a frame to be sent.
-    fn push_send_frame(&mut self, frame: Box<framing::CompressibleHttpFrame>, stream_id: framing::StreamId) {
+    fn push_send_frame(&mut self, frame: Box<framing::CompressibleHttpFrame>, stream_id: StreamId) {
         log_conn_send_frame!("Pushing frame for send", frame);
 
         self.send_frames.push_back(

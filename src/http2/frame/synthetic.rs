@@ -19,6 +19,7 @@
 use std::mem;
 
 // osmium
+use http2::stream::StreamId;
 use http2::frame::{self as framing, CompressibleHttpFrame};
 
 #[derive(Debug)]
@@ -62,7 +63,7 @@ impl CompressibleHttpFrame for HeaderBlockSyntheticFrame {
     }
 
     /// Override the default compression, compressing the header and any continuation frames at the same time
-    fn compress_frame(mut self: Box<Self>, stream_id: framing::StreamId) -> Vec<u8> {
+    fn compress_frame(mut self: Box<Self>, stream_id: StreamId) -> Vec<u8> {
         let mut temp_header_frame = framing::headers::HeadersFrameCompressModel::new(false, false);
         mem::swap(&mut self.header_frame, &mut temp_header_frame);
         let mut result = Box::new(temp_header_frame).compress_frame(stream_id);

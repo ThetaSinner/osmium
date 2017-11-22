@@ -22,11 +22,12 @@ use std::collections::hash_map;
 
 // osmium
 use http2::frame as framing;
+use http2::stream::StreamId;
 
 // TODO this never cleans up.
 pub struct StreamBlocker {
-    blocked_streams: HashMap<framing::StreamId, VecDeque<Box<framing::CompressibleHttpFrame>>>,
-    priority: VecDeque<framing::StreamId>
+    blocked_streams: HashMap<StreamId, VecDeque<Box<framing::CompressibleHttpFrame>>>,
+    priority: VecDeque<StreamId>
 }
 
 // TODO this doesn't have a great interface. These methods have to be called in sequence to some extent.
@@ -38,7 +39,7 @@ impl StreamBlocker {
         }
     }
 
-    pub fn block_frame(&mut self, stream_id: framing::StreamId, frame: Box<framing::CompressibleHttpFrame>) {
+    pub fn block_frame(&mut self, stream_id: StreamId, frame: Box<framing::CompressibleHttpFrame>) {
         if self.blocked_streams.contains_key(&stream_id) {
             // This stream is already blocking so append to the queue for this frame
             match self.blocked_streams.entry(stream_id) {
@@ -62,18 +63,18 @@ impl StreamBlocker {
         }
     }
 
-    pub fn is_blocking(&self, stream_id: framing::StreamId) -> bool {
+    pub fn is_blocking(&self, stream_id: StreamId) -> bool {
         self.blocked_streams.contains_key(&stream_id)
     }
 
-    pub fn get_unblock_priorities(&self) -> VecDeque<framing::StreamId> {
+    pub fn get_unblock_priorities(&self) -> VecDeque<StreamId> {
         self.priority.clone()
     }
 
     // Here's a lovely example of a bad interface. You cannot read an entry without the possibility 
     // of modifying it. Therefore forcing this method, which should not change internal state, to
     // require self to be mutable.
-    pub fn get_next_send_size(&mut self, stream_id: framing::StreamId) -> Option<i32> {
+    pub fn get_next_send_size(&mut self, stream_id: StreamId) -> Option<i32> {
         match self.blocked_streams.entry(stream_id) {
             hash_map::Entry::Occupied(ref entry) => {
                 match entry.get().back() {
@@ -98,7 +99,7 @@ impl StreamBlocker {
         }
     }
 
-    pub fn get_next_frame(&mut self, stream_id: framing::StreamId) -> Option<Box<framing::CompressibleHttpFrame>> {
+    pub fn get_next_frame(&mut self, stream_id: StreamId) -> Option<Box<framing::CompressibleHttpFrame>> {
         match self.blocked_streams.entry(stream_id) {
             hash_map::Entry::Occupied(mut queue) => {
                 queue.get_mut().pop_back()
