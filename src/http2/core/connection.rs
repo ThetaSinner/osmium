@@ -24,7 +24,7 @@ use std::rc::Rc;
 // osmium
 use http2::frame as framing;
 use http2::error;
-use http2::stream::{self as streaming, StreamId};
+use http2::stream::{self as streaming, StreamId, CONNECTION_CONTROL_STREAM_ID};
 use http2::hpack::context as hpack_context;
 use shared::server_trait;
 use http2::settings;
@@ -124,7 +124,7 @@ impl<'a> Connection<'a> {
         match frame_type {
             framing::FrameType::Ping => {
                 // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
-                if frame.header.stream_id != 0x0 {
+                if !streaming::is_connection_control_stream_id(frame.header.stream_id)  {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::StreamIdentifierOnConnectionFrame
@@ -153,7 +153,7 @@ impl<'a> Connection<'a> {
                             ping_response.set_ping_payload(ping_frame.get_payload());
 
                             // (6.7) A PING frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR
-                            self.push_send_frame(Box::new(ping_response), 0x0);
+                            self.push_send_frame(Box::new(ping_response), CONNECTION_CONTROL_STREAM_ID);
                         }
                     },
                     Err(e) => {
@@ -165,7 +165,7 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::Headers => {
                 // (6.2) A HEADERS frame which is not associated with a stream is a connection error of type PROTOCOL_ERROR
-                if frame.header.stream_id == 0x0 {
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
@@ -176,7 +176,7 @@ impl<'a> Connection<'a> {
                 self.move_to_stream(frame_type, frame, app);
             },
             framing::FrameType::Data => {
-                if frame.header.stream_id == 0x0 {
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
@@ -188,8 +188,7 @@ impl<'a> Connection<'a> {
                 self.move_to_stream(frame_type, frame, app);
             },
             framing::FrameType::WindowUpdate => {
-                // TODO would be nice if this was a named operation.
-                if frame.header.stream_id == 0x0 {
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     let window_update_frame = framing::window_update::WindowUpdateFrame::new_conn(&frame.header, &mut frame.payload.into_iter());
 
                     // TODO handle frame decode error.
@@ -210,7 +209,7 @@ impl<'a> Connection<'a> {
                 }
             },
             framing::FrameType::Priority => {
-                if frame.header.stream_id == 0x0 {
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         // TODO this means a client using this error as a debug message won't know which frame caused a problem
@@ -223,7 +222,7 @@ impl<'a> Connection<'a> {
                 // an initial version of this server.
             },
             framing::FrameType::Settings => {
-                if frame.header.stream_id != 0x0 {
+                if !streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         // TODO this means a client using this error as a debug message won't know which frame caused a problem
@@ -250,7 +249,7 @@ impl<'a> Connection<'a> {
                 panic!("will crash; did not expect go away from client");
             },
             framing::FrameType::ResetStream => {
-                if frame.header.stream_id == 0x0 {
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
@@ -300,7 +299,6 @@ impl<'a> Connection<'a> {
                         // Fetch any send frames which have been generated on the stream.
                         let mut is_blocked = self.stream_blocker.is_blocking(promised_stream_id);
                         let stream_frames = stream.fetch_send_frames();
-                        // TODO doesn't need to peek any more
                         let mut stream_frame_iter = stream_frames.into_iter().rev();
                         while let Some(frame) = stream_frame_iter.next() {
                             match frame.get_frame_type() {
@@ -511,7 +509,7 @@ impl<'a> Connection<'a> {
         );
 
         // (6.8) A GOAWAY frame with a stream identifier other than 0x0 is a connection error of type PROTOCOL_ERROR.
-        self.push_send_frame(Box::new(go_away), 0x0);
+        self.push_send_frame(Box::new(go_away), CONNECTION_CONTROL_STREAM_ID);
     }
 
     // TODO do a fetch all like in stream?
@@ -630,9 +628,8 @@ impl<'a> Connection<'a> {
         if send_acknowledge {
             let mut settings_acknowledge = framing::settings::SettingsFrameCompressModel::new();
             settings_acknowledge.set_acknowledge();
-
-            // TODO const
-            self.push_send_frame(Box::new(settings_acknowledge), 0x0);
+    
+            self.push_send_frame(Box::new(settings_acknowledge), CONNECTION_CONTROL_STREAM_ID);
         }
     }
 
@@ -652,7 +649,7 @@ impl<'a> Connection<'a> {
         let update_amount = flow_control::get_window_update_amount(self.receive_window);
         if update_amount > 0 {
             let window_update_frame = framing::window_update::WindowUpdateFrameCompressModel::new(update_amount);
-            self.push_send_frame(Box::new(window_update_frame), 0x0);
+            self.push_send_frame(Box::new(window_update_frame), CONNECTION_CONTROL_STREAM_ID);
         }
     }
 

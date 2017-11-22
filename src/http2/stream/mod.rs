@@ -42,6 +42,16 @@ use shared::push_error;
 /// Convenience typedef for stream identifiers.
 pub type StreamId = u32;
 
+/// Convenience constant to denote the `0x0` stream identifier used for marking connection control messages.
+/// N.B. Because this is marked `const` the compiler should inline it to everywhere it's used.
+pub const CONNECTION_CONTROL_STREAM_ID: StreamId = 0x0;
+
+/// Convencience method to name the operation of checking whether the given stream identifer refers to a 
+/// connection control message.
+pub fn is_connection_control_stream_id(stream_id: StreamId) -> bool {
+    stream_id == CONNECTION_CONTROL_STREAM_ID
+}
+
 // TODO break this file up!
 
 // TODO can/should any of this data be moved into the state machine?
