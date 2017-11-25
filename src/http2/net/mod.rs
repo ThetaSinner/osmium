@@ -210,8 +210,6 @@ impl<T, R, S> Server<T, R, S>
                                 });
 
                             let loop_read_frame_future = read_frame_future
-                                // TODO (goaway) put a select in here which reads from a shutdown oneshot channel. 
-                                // When this loop exits, tx a.k.a. to_conn_thread will be dropped.
                                 .join(future::ok(to_conn_thread));
 
                             loop_read_frame_future.select2(shutdown_read_future).then(|result| {
@@ -250,7 +248,14 @@ impl<T, R, S> Server<T, R, S>
                         inner_handle.spawn(send_loop);
                     },
                     Err(e) => {
-                        panic!("handshake fail {:?}", e);
+                        match e {
+                            h2handshake::HandshakeError::DidNotUpgrade(_connection, received_bytes) => {
+                                info!("Rejected connection because of failed handshake [{:?}]", &received_bytes[0..80]);
+                            },
+                            _ => {
+                                panic!("handshake fail {:?}", e);
+                            }
+                        }
                     }
                 }
             });
