@@ -112,7 +112,9 @@ pub enum ErrorName {
     EnablePushSettingInvalidValue,
     InvalidMaxFrameSize,
     InvalidInitialWindowSize,
-    ConnectionFlowControlWindowNotRespected
+    ConnectionFlowControlWindowNotRespected,
+    SettingsAcknowledgementWithNonZeroPayloadLength,
+    SettingsFramePayloadSizeNotAMultipleOfSix
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -162,6 +164,12 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::ConnectionFlowControlWindowNotRespected => {
                 "connection flow control window not respected"
+            },
+            ErrorName::SettingsAcknowledgementWithNonZeroPayloadLength => {
+                "settings acknowledge frame received with non-zero payload length"
+            },
+            ErrorName::SettingsFramePayloadSizeNotAMultipleOfSix => {
+                "settings frame payload size is not a multiple of 6"
             }
         }.to_owned().as_bytes().to_vec()
     }

@@ -231,7 +231,8 @@ impl<'a> Connection<'a> {
                     return;
                 }
 
-                let settings_frame = framing::settings::SettingsFrame::new(&frame.header, &mut frame.payload.into_iter());
+                // TODO handle decode error
+                let settings_frame = framing::settings::SettingsFrame::new(&frame.header, &mut frame.payload.into_iter()).unwrap();
 
                 if settings_frame.is_acknowledge() {
                     // TODO handle ack received

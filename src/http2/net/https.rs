@@ -73,7 +73,8 @@ impl h2handshake::H2Handshake for HttpsH2Handshake
                         })
                         .and_then(move |(frame_header, (stream, buf))| {
                             // TODO need to check frame type and stream id
-                            let settings_frame = framing::settings::SettingsFrame::new(&frame_header, &mut buf.to_vec().into_iter());
+                            // TODO error is ignored (doing this to get the error handling below checked in)
+                            let settings_frame = framing::settings::SettingsFrame::new(&frame_header, &mut buf.to_vec().into_iter()).unwrap();
 
                             let response = Box::new(settings_response).compress_frame(0x0);
                             future::ok(settings_frame)
