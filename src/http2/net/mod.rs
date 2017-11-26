@@ -176,10 +176,7 @@ impl<T, R, S> Server<T, R, S>
                             // Now just letting this closure exit will free this thread back into the pool to be used again.
                         });
 
-                        let shutdown_read_future = shutdown_read_rx.map_err(|e| {
-                            println!("Error on read shutdown {}. Maybe the connection ended without the server requesting a shutdown?", e);
-                        })
-                        .map(|_| [
+                        let shutdown_read_future = shutdown_read_rx.map(|_| [
                             // value received on shutdown oneshot, ignore value.
                             ()
                         ]);
@@ -187,26 +184,16 @@ impl<T, R, S> Server<T, R, S>
                         let reader_loop = loop_fn((reader, tx, shutdown_read_future), move |(reader, to_conn_thread, shutdown_read_future)| {
                             // this read exact will run on the event loop until enough bytes for an
                             // http2 header frame have been read
-
                             let read_frame_future = tokio_io::read_exact(reader, [0; framing::FRAME_HEADER_SIZE])
-                                .map_err(|err| {
-                                    // TODO this prints then swallows any errors. should handle any io errors
-                                    // handle error: connection closed results in unexpected eof error here
-                                    error!("Error reading the frame header [{:?}]", err);
-                                    ()
-                                })
                                 .and_then(|(reader, frame_header_buf)| {
+                                    // Note that this can panic if the frame header is too small. But because the first read specifies
+                                    // how many bytes to read before continuing to here, that should never be a problem.
                                     let frame_header = framing::decompress_frame_header(frame_header_buf.to_vec());
                                     
                                     let mut buf = Vec::with_capacity(frame_header.length as usize);
                                     buf.resize(frame_header.length as usize, 0);
-                                    tokio_io::read_exact(reader, buf)
-                                        .map_err(|err| {
-                                            // TODO handle the error
-                                            error!("Error reading the frame payload [{:?}]", err);
-                                            ()
-                                        })
-                                        .join(future::ok(frame_header))
+
+                                    tokio_io::read_exact(reader, buf).join(future::ok(frame_header))
                                 });
 
                             let loop_read_frame_future = read_frame_future
@@ -221,29 +208,42 @@ impl<T, R, S> Server<T, R, S>
 
                                         Ok(future::Loop::Continue((reader, to_conn_thread, shutdown_read_future)))
                                     },
-                                    Ok(future::Either::B((_, read_future))) => {
-                                        Ok(future::Loop::Break(read_future))
+                                    Ok(future::Either::B((_, _read_future))) => {
+                                        debug!("The internal connection has sent the shutdown signal to the network read loop, nothing more will be read.");
+                                        Ok(future::Loop::Break(()))
                                     },
-                                    _ => {
-                                        panic!("not handled yet");
+                                    Err(future::Either::A((e, _))) => {
+                                        error!("Connection terminated by the remote [{}]", e);
+                                        Ok(future::Loop::Break(()))
+                                    },
+                                    Err(future::Either::B((e, _))) => {
+                                        error!("Network read loop lost connection with the internal connection, will stop reading from the network [{:?}]", e);
+                                        Ok(future::Loop::Break(()))
                                     }
                                 }
                             })
                         });
 
-                        inner_handle.spawn(reader_loop.map(|_| {()}));
+                        inner_handle.spawn(reader_loop);
 
+                        // From the documentation, when all sender handles have been dropped the stream is considered completed and 'none' is
+                        // returned. That is what is needed to end the 'fold'.
+                        // Therefore, no shutdown mechanism is required for this. As soon as the connection thread exits this future will complete
+                        // and be removed from the event loop.
                         let send_loop = frx.fold(writer, |writer, msg| {
                             trace!("will push to network [{:?}]", msg);
                             tokio_io::write_all(writer, msg)
                                 .map(|(w, _)| {
+                                    // Yield the writer to the next iteration of this process.
                                     w
                                 })
-                                .map_err(|_e| {
-                                    error!("error writing to the network [{:?}]", _e);
+                                .map_err(|e| {
+                                    // TODO If there's a network error then the connection should probably be shut down?
+                                    error!("error writing to the network [{:?}]", e);
                                     ()
                                 })
-                        }).map(|_| ());
+                        })
+                        .map(|_| ()); // Drop the writer, can't move a future which returns a value onto the event loop.
 
                         inner_handle.spawn(send_loop);
                     },
@@ -251,9 +251,6 @@ impl<T, R, S> Server<T, R, S>
                         match e {
                             h2handshake::HandshakeError::DidNotUpgrade(_connection, received_bytes) => {
                                 info!("Rejected connection because of failed handshake [{:?}]", &received_bytes[0..80]);
-                            },
-                            _ => {
-                                panic!("handshake fail {:?}", e);
                             }
                         }
                     }
