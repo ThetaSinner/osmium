@@ -81,7 +81,9 @@ impl<'a> Connection<'a> {
             receive_window: settings::INITIAL_FLOW_CONTROL_WINDOW_SIZE
         };
 
-        new_con.apply_settings(initial_settings, false);
+        // TODO The ONLY time when ack is not required is when a 101 switching protocols is sent.
+        // Switching to true for now, and need to tidy up later.
+        new_con.apply_settings(initial_settings, true);
 
         new_con
     }
