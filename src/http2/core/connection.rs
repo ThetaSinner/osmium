@@ -629,6 +629,7 @@ impl<'a> Connection<'a> {
 
         // TODO break this function down so that the logic isn't required.
         if send_acknowledge {
+            trace!("Acknowledging settings");
             let mut settings_acknowledge = framing::settings::SettingsFrameCompressModel::new();
             settings_acknowledge.set_acknowledge();
     

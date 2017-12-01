@@ -110,18 +110,24 @@ pub struct DataFrame {
 
 impl DataFrame {
     pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> DataFrame {
-        let pad_length = if frame_header.flags & FLAG_PADDED == FLAG_PADDED {
-            frame.next().unwrap()
+        let (pad_length, data_length_reduction) = if frame_header.flags & FLAG_PADDED == FLAG_PADDED {
+            let pad_length = frame.next().unwrap();
+            (pad_length, pad_length as u32 + 1)
         }
         else {
-            0
+            (0, 0)
         };
 
+        // TODO if the actual data length after padding is removed is 0 or less then connection error.
+
         let mut payload = Vec::new();
-        for _ in 0..frame_header.length {
+        for _ in 0..(frame_header.length - data_length_reduction) {
             payload.push(frame.next().unwrap());
         }
 
+        // TODO it shouldn't be necessary to consume the iterator. This was done thinking that the data
+        // might be read off the network as a stream, but whole payloads are read based on the header
+        // length.
         for _ in 0..pad_length {
             frame.next().unwrap();
         }
