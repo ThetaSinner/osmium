@@ -106,8 +106,8 @@ impl<'a> Connection<'a> {
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),
             None => {
-                // TODO this can be handled gracefully, no need to crash.
-                panic!("cannot handle frame type not recognised");
+                debug!("Received unrecognised frame type");
+                return;
             }
         };
 
