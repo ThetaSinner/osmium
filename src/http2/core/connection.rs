@@ -177,6 +177,18 @@ impl<'a> Connection<'a> {
 
                 self.move_to_stream(frame_type, frame, app);
             },
+            framing::FrameType::Continuation => {
+                // (6.2) A CONTINUATION frame which is not associated with a stream is a connection error of type PROTOCOL_ERROR
+                if streaming::is_connection_control_stream_id(frame.header.stream_id) {
+                    self.shutdown_connection(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                self.move_to_stream(frame_type, frame, app);
+            },
             framing::FrameType::Data => {
                 if streaming::is_connection_control_stream_id(frame.header.stream_id) {
                     self.shutdown_connection(error::HttpError::ConnectionError(
