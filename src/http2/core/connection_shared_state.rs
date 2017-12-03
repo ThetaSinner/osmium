@@ -21,6 +21,7 @@ use http2::stream::StreamId;
 
 pub struct ConnectionSharedState {
     pub remote_settings: settings::Settings,
+    pub local_settings: settings::Settings,
     next_server_created_stream_id: StreamId,
     // If streams were ever made concurrent it would be VITAL that this is locked. It is used to communicate to
     // the client which streams have started processing, or at least the highest numbered one. That means no more
@@ -29,9 +30,10 @@ pub struct ConnectionSharedState {
 }
 
 impl ConnectionSharedState {
-    pub fn new() -> Self {
+    pub fn new(local_settings: settings::Settings) -> Self {
         ConnectionSharedState {
             remote_settings: settings::Settings::spec_default(),
+            local_settings: local_settings,
             next_server_created_stream_id: 2,
             highest_started_processing_stream_id: 0
         }

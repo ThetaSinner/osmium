@@ -27,7 +27,7 @@ use http2::error;
 const FLAG_ACK: u8 = 0x1;
 
 // TODO this has been copied out to the http2::settings module.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SettingsParameter {
     name: settings::SettingName,
     value: u32
@@ -43,7 +43,7 @@ impl SettingsParameter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SettingsFrameCompressModel {
     flags: u8,
     parameters: Vec<SettingsParameter>

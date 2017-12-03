@@ -59,11 +59,12 @@ pub struct Connection<'a> {
 
 impl<'a> Connection<'a> {
     pub fn new(
-        hpack_send_context: hpack_context::SendContext<'a>, 
-        hpack_recv_context: hpack_context::RecvContext<'a>, 
-        initial_settings: framing::settings::SettingsFrame,
+        hpack_send_context: hpack_context::SendContext<'a>,
+        hpack_recv_context: hpack_context::RecvContext<'a>,
+        initial_local_settings: settings::Settings,
+        initial_remote_settings_frame: framing::settings::SettingsFrame,
         shutdown_signaller: shutdown_signal::ShutdownSignaller
-    ) -> Connection<'a> 
+    ) -> Connection<'a>
     {
         let mut new_con = Connection {
             send_frames: VecDeque::new(),
@@ -73,7 +74,7 @@ impl<'a> Connection<'a> {
             streams: HashMap::new(),
             stream_blocker: stream_blocker::StreamBlocker::new(),
             promised_streams_queue: VecDeque::new(),
-            connection_shared_state: Rc::new(RefCell::new(connection_shared_state::ConnectionSharedState::new())),
+            connection_shared_state: Rc::new(RefCell::new(connection_shared_state::ConnectionSharedState::new(initial_local_settings))),
             highest_remote_initiated_stream_identifier: 0,
             shutdown_initiated: false,
             shutdown_signaller: shutdown_signaller,
@@ -83,7 +84,7 @@ impl<'a> Connection<'a> {
 
         // TODO The ONLY time when ack is not required is when a 101 switching protocols is sent.
         // Switching to true for now, and need to tidy up later.
-        new_con.apply_settings(initial_settings, true);
+        new_con.apply_settings(initial_remote_settings_frame, true);
 
         new_con
     }
@@ -102,7 +103,6 @@ impl<'a> Connection<'a> {
             return;
         }
 
-        // TODO handle frame type not recognised.
         let frame_type = match frame.header.frame_type {
             Some(ref frame_type) => frame_type.clone(),
             None => {
@@ -194,6 +194,14 @@ impl<'a> Connection<'a> {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
+                    ));
+                    return;
+                }
+
+                if frame.header.length > self.connection_shared_state.borrow().local_settings.max_frame_size {
+                    self.shutdown_connection(error::HttpError::ConnectionError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::DataFramePayloadLargerThanSettingsValue
                     ));
                     return;
                 }

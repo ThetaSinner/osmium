@@ -22,7 +22,7 @@ extern crate chrono;
 
 use std::fs::File;
 use std::io::prelude::*;
-use osmium::http2::{self, net, header, stream as streaming};
+use osmium::http2::{self, net, header, stream as streaming, settings};
 use osmium::shared::connection_handle::ConnectionHandle;
 use osmium::shared;
 use chrono::{DateTime, TimeZone, NaiveDateTime, Utc, Local};
@@ -223,5 +223,11 @@ fn main() {
     security.set_ssl_cert_path(String::from("../../../tests/cert.pfx"));
     settings.set_security(security);
 
-    net::Server::new(MyServer {}, settings).start_server();
+    let mut http2_settings = Vec::new();
+    http2_settings.push(settings::SettingsParameter::new(settings::SettingName::SettingsHeaderTableSize, 65536));
+    http2_settings.push(settings::SettingsParameter::new(settings::SettingName::SettingsInitialWindowSize, 131072));
+    http2_settings.push(settings::SettingsParameter::new(settings::SettingName::SettingsMaxFrameSize, 16384));
+    settings.set_http2_settings(http2_settings);
+
+    net::Server::new(MyServer {}, settings).unwrap().start_server();
 }

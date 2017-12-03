@@ -114,7 +114,8 @@ pub enum ErrorName {
     InvalidInitialWindowSize,
     ConnectionFlowControlWindowNotRespected,
     SettingsAcknowledgementWithNonZeroPayloadLength,
-    SettingsFramePayloadSizeNotAMultipleOfSix
+    SettingsFramePayloadSizeNotAMultipleOfSix,
+    DataFramePayloadLargerThanSettingsValue
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -170,6 +171,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::SettingsFramePayloadSizeNotAMultipleOfSix => {
                 "settings frame payload size is not a multiple of 6"
+            },
+            ErrorName::DataFramePayloadLargerThanSettingsValue => {
+                "data frame payload larger than settings value"
             }
         }.to_owned().as_bytes().to_vec()
     }

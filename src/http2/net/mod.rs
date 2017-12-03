@@ -26,6 +26,7 @@ use std::sync::Arc;
 use std::rc::Rc;
 use std::marker;
 use std::mem;
+use std::net;
 
 // tokio
 use futures::{Stream, Sink, Future, stream};
@@ -49,6 +50,11 @@ use http2::stream as streaming;
 use http2::settings;
 use shared::server_settings;
 
+#[derive(Debug)]
+pub enum ServerError {
+    InvalidSettingsConfiguration
+}
+
 // TODO this doesn't really belong in the net package.
 pub struct Server<T, R, S>
     where T: server_trait::OsmiumServer<Request=R, Response=S>, 
@@ -57,7 +63,10 @@ pub struct Server<T, R, S>
 {
     hpack: hpack::HPack,
     app: T,
-    server_settings: server_settings::ServerSettings
+    security_settings: Option<server_settings::SecuritySettings>,
+    bind_address: net::SocketAddr,
+    local_settings: settings::Settings,
+    local_settings_frame: framing::settings::SettingsFrameCompressModel
 }
 
 impl<T, R, S> Server<T, R, S> 
@@ -65,30 +74,50 @@ impl<T, R, S> Server<T, R, S>
           R: 'static + convert::From<streaming::StreamRequest>,
           S: 'static + convert::Into<streaming::StreamResponse>
 {
-    pub fn new(app: T, server_settings: server_settings::ServerSettings) -> Self {
-        Server {
+    pub fn new(app: T, server_settings: server_settings::ServerSettings) -> Result<Self, ServerError> {
+        // Read the settings configuration.
+        let mut local_settings = settings::Settings::spec_default();
+        if local_settings.apply_changes(server_settings.get_http2_settings()).is_err() {
+            return Err(ServerError::InvalidSettingsConfiguration);
+        };
+
+        let mut local_settings_frame = framing::settings::SettingsFrameCompressModel::new();
+        for setting in server_settings.get_http2_settings() {
+            local_settings_frame.add_parameter(setting.get_name(), setting.get_value());
+        }
+
+        // Build the server bind address.
+        let addr = format!("{}:{}", server_settings.get_host(), server_settings.get_port()).parse().unwrap();
+
+        Ok(Server {
             hpack: hpack::HPack::new(),
             app: app,
-            server_settings: server_settings
-        }
+            security_settings: server_settings.get_security(),
+            bind_address: addr,
+            local_settings: local_settings,
+            local_settings_frame: local_settings_frame
+        })
     }
 
     // The start method consumes self so that it can ensure it can be used on the connection threads.
     // The connection threads take a closure which must have static lifetime. If server startup 
     // succeeds, then the a shared pointer to self is returned.
-    pub fn start_server(self) -> Arc<Box<Self>>
+    pub fn start_server(mut self) -> Arc<Box<Self>>
     {
         // tokio event loop
         let mut event_loop = tokio_core::reactor::Core::new().unwrap();
         let handle = event_loop.handle();
 
         // create a listener for incoming tcp connections
-        let addr = format!("{}:{}", self.server_settings.get_host(), self.server_settings.get_port()).parse().unwrap();
-        let listener = tokio_core::net::TcpListener::bind(&addr, &handle).unwrap();
+        let listener = tokio_core::net::TcpListener::bind(&self.bind_address, &handle).unwrap();
 
         let thread_pool = Rc::new(ThreadPool::new(10));
 
-        let acceptor_factory = acceptor_factory::AcceptorFactory::new(&self.server_settings.get_security());
+        // Create the acceptor factory.
+        let mut security = None;
+        mem::swap(&mut security, &mut self.security_settings);
+        // TODO might not exist.
+        let acceptor_factory = acceptor_factory::AcceptorFactory::new(&security.unwrap());
 
         // TODO this should vary depending on the startup type chosen (http/https)
         let handshake: Box<self::h2handshake::H2Handshake> = Box::new(https::HttpsH2Handshake::new(acceptor_factory));
@@ -100,13 +129,8 @@ impl<T, R, S> Server<T, R, S>
             debug!("Starting connection on {}", _remote_addr);
 
             let inner_handle = handle.clone();
-
-            let mut settings_response = framing::settings::SettingsFrameCompressModel::new();
-            settings_response.add_parameter(settings::SettingName::SettingsHeaderTableSize, 65536);
-            settings_response.add_parameter(settings::SettingName::SettingsInitialWindowSize, 131072);
-            settings_response.add_parameter(settings::SettingName::SettingsMaxFrameSize, 16384);
-
-            let handshake_future = handshake.attempt_handshake(socket, Box::new(settings_response))
+            
+            let handshake_future = handshake.attempt_handshake(socket, Box::new(server_instance.local_settings_frame.clone()))
             .map_err(|e| {
                 error!("I/O error while attempting connection handshake {}", e);
             })
@@ -137,6 +161,7 @@ impl<T, R, S> Server<T, R, S>
                             let mut connection = connection::Connection::new(
                                 server_instance.hpack.new_send_context(),
                                 server_instance.hpack.new_recv_context(),
+                                server_instance.local_settings.clone(),
                                 temp_frame,
                                 shutdown_signal::ShutdownSignaller::new(shutdown_read_tx)
                             );

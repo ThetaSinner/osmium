@@ -11,16 +11,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// osmium
 use http2::settings as http2_settings;
 
 pub struct ServerSettings {
     host: String,
     port: u16,
     security: Option<SecuritySettings>,
-    // TODO read these settings on connection start.
     http2_settings: Option<Vec<http2_settings::SettingsParameter>>
 }
 
+#[derive(Clone)]
 pub struct SecuritySettings {
     ssl_cert_path: String,
     ssl_cert_pass: String
@@ -68,20 +69,23 @@ impl ServerSettings {
         self.port
     }
 
-    // TODO this whole feature is a bit messy now.
-    pub fn is_use_security(&self) -> bool {
-        self.security.is_some()
-    }
-
-    pub fn get_security(&self) -> &SecuritySettings {
-        if let Some(ref security) = self.security {
-            return security;
-        }
-        
-        panic!("Server not correctly configured. Expected security settings but none were found");
+    pub fn get_security(&self) -> Option<SecuritySettings> {
+        self.security.clone()
     }
 
     pub fn set_security(&mut self, security: SecuritySettings) {
         self.security = Some(security);
+    }
+
+    pub fn get_http2_settings(&self) -> &[http2_settings::SettingsParameter] {
+        if let Some(ref http2_settings) = self.http2_settings {
+            return http2_settings;
+        }
+        
+        &[]
+    }
+
+    pub fn set_http2_settings(&mut self, http2_settings: Vec<http2_settings::SettingsParameter>) {
+        self.http2_settings = Some(http2_settings);
     }
 }
