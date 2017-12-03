@@ -371,6 +371,6 @@ mod tests {
         let mut settings = server_settings::ServerSettings::default();
         settings.set_security(server_settings::SecuritySettings::default());
 
-        Server::new(MyServer {}, settings).start_server();
+        Server::new(MyServer {}, settings).unwrap().start_server();
     }
 }
