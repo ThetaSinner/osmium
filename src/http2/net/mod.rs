@@ -275,7 +275,12 @@ impl<T, R, S> Server<T, R, S>
                     Err(e) => {
                         match e {
                             h2handshake::HandshakeError::DidNotUpgrade(_connection, received_bytes) => {
-                                info!("Rejected connection because of failed handshake [{:?}]", &received_bytes[0..80]);
+                                if received_bytes.len() > 80 {
+                                    info!("Rejected connection because of failed handshake [{:?}]", &received_bytes[0..80]);
+                                }
+                                else {
+                                    info!("Rejected connection because of failed handshake [{:?}]", received_bytes);
+                                }
                             }
                         }
                     }

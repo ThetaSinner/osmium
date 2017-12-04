@@ -86,6 +86,15 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                 unpacked_headers.headers.push_header(header::Header::from(field));
             }
         }
+        else if peek_front & flags::SIZE_UPDATE_FLAG == flags::SIZE_UPDATE_FLAG {
+            let decoded_number = number::decode(&mut data_iter, 5);
+            unpacked_headers.octets_read += decoded_number.octets_read;
+
+            // TODO the new value must be below the maximum specified by the protocol using hpack, in this case http2
+            // as this is being written first it will have to be modified once http2 settings can be decoded in the http2 module.
+
+            context.set_max_size(decoded_number.num as usize);
+        }
         else if peek_front & flags::LITERAL_WITHOUT_INDEXING_FLAG == 0 {
             let decoded_number = number::decode(&mut data_iter, 4);
             unpacked_headers.octets_read += decoded_number.octets_read;
@@ -153,16 +162,8 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
             header.set_allow_compression(false);
             unpacked_headers.headers.push_header(header);
         }
-        else if peek_front & flags::SIZE_UPDATE_FLAG == flags::SIZE_UPDATE_FLAG {
-            let decoded_number = number::decode(&mut data_iter, 5);
-            unpacked_headers.octets_read += decoded_number.octets_read;
-
-            // TODO the new value must be below the maximum specified by the protocol using hpack, in this case http2
-            // as this is being written first it will have to be modified once http2 settings can be decoded in the http2 module.
-
-            context.set_max_size(decoded_number.num as usize);
-        }
         else {
+            // TODO that doesn't look right
             break;
         }
     }
