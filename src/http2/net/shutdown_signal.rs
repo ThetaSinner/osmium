@@ -19,14 +19,14 @@
 use std::mem;
 
 // futures
-use futures::sync::oneshot as futures_oneshot;
+use futures::sync::mpsc as futures_mpsc;
 
 pub struct ShutdownSignaller {
-    shutdown_read_tx: Option<futures_oneshot::Sender<u8>>
+    shutdown_read_tx: Option<futures_mpsc::Sender<u8>>
 }
 
 impl ShutdownSignaller{
-    pub fn new(shutdown_read_tx: futures_oneshot::Sender<u8>) -> Self {
+    pub fn new(shutdown_read_tx: futures_mpsc::Sender<u8>) -> Self {
         ShutdownSignaller {
             shutdown_read_tx: Some(shutdown_read_tx)
         }
@@ -37,7 +37,14 @@ impl ShutdownSignaller{
         if self.shutdown_read_tx.is_some() {
             let mut srtx = None;
             mem::swap(&mut self.shutdown_read_tx, &mut srtx);
-            srtx.unwrap().send(1).unwrap();
+            match srtx.unwrap().try_send(1) {
+                Ok(_) => {
+                    trace!("Signal shutdown read loop");
+                },
+                Err(e) => {
+                    debug!("Attempted read loop shutdown but the signal failed to send, the loop may have already shut down {:?}", e);
+                }
+            }
         }
         else {
             panic!("cannot call signal shutdown more than once.");

@@ -32,7 +32,6 @@ use std::net;
 use futures::{Stream, Sink, Future, stream};
 use futures::future::{self, loop_fn};
 use futures::sync::mpsc as futures_mpsc;
-use futures::sync::oneshot as futures_oneshot;
 use tokio_core;
 use tokio_io::io as tokio_io;
 use tokio_io::AsyncRead;
@@ -154,7 +153,7 @@ impl<T, R, S> Server<T, R, S>
                         
                         let (reader, writer) = handshake_completion.stream.split();
 
-                        let (shutdown_read_tx, shutdown_read_rx) = futures_oneshot::channel::<u8>();
+                        let (shutdown_read_tx, shutdown_read_rx) = futures_mpsc::channel::<u8>(1);
                         let (mut ftx, frx) = futures_mpsc::channel(5);
                         let (tx, rx) = mpsc::channel::<(framing::FrameHeader, Vec<u8>)>();
                         thread_pool.execute(move || {
@@ -163,14 +162,14 @@ impl<T, R, S> Server<T, R, S>
                                 server_instance.hpack.new_recv_context(),
                                 server_instance.local_settings.clone(),
                                 temp_frame,
-                                shutdown_signal::ShutdownSignaller::new(shutdown_read_tx)
+                                shutdown_signal::ShutdownSignaller::new(shutdown_read_tx.clone())
                             );
 
                             // Note that if the initial settings contain an error the connection will immediately initiate shutdown.
                             // The documentation for iter() on a receiver states that it will never panic, just yield None when the 
                             // sender has hung up.
                             let mut msg_iter = rx.iter();
-                            while let Some(msg) = msg_iter.next() {
+                            'connection_loop: while let Some(msg) = msg_iter.next() {
                                 connection.recv(
                                     framing::Frame {
                                         header: msg.0,
@@ -180,8 +179,13 @@ impl<T, R, S> Server<T, R, S>
                                 );
                                 
                                 while let Some(response_frame) = connection.pull_frame() {
-                                    // TODO it's possible to crash the server here... no idea how but this can't just be unwrapped.
-                                    ftx = ftx.send(response_frame).wait().unwrap();
+                                    ftx = match ftx.send(response_frame).wait() {
+                                        Ok(ftx) => ftx,
+                                        Err(e) => {
+                                            info!("Write error, will exit connection loop {:?}", e);
+                                            break 'connection_loop;
+                                        }
+                                    };
                                 }
 
                                 // TODO this is quite a big commitement, the connection will not process any new frames until this is done.
@@ -193,7 +197,16 @@ impl<T, R, S> Server<T, R, S>
                                 }
                             }
 
-                            println!("about to drop connection");
+                            info!("connection loop ended, about to drop connection");
+
+                            match shutdown_read_tx.clone().try_send(1) {
+                                Ok(_) => {
+                                    trace!("Shutdown read loop on connection end");
+                                },
+                                Err(e) => {
+                                    debug!("Attempted read loop shutdown but the signal failed to send, the loop already shut down {:?}", e);
+                                }
+                            }
 
                             // TODO (goaway) The loop has exited (again, hopefully) so check for send frames and figure out how to
                             // keep the send loop alive long enough to make sure the goaway frame has sent.
@@ -202,8 +215,8 @@ impl<T, R, S> Server<T, R, S>
                             // Now just letting this closure exit will free this thread back into the pool to be used again.
                         });
 
-                        let shutdown_read_future = shutdown_read_rx.map(|_| [
-                            // value received on shutdown oneshot, ignore value.
+                        let shutdown_read_future = shutdown_read_rx.into_future().map(|_| [
+                            // value received on shutdown channel, ignore value.
                             ()
                         ]);
 

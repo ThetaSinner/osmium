@@ -111,6 +111,8 @@ impl<'a> Connection<'a> {
             }
         };
 
+        // TODO this possibly shouldn't be read into the server. It's complicated to reject but 
+        // would save read time and memory.
         if frame.header.length > self.connection_shared_state.borrow().local_settings.max_frame_size {
             self.shutdown_connection(error::HttpError::ConnectionError(
                 error::ErrorCode::ProtocolError,
