@@ -111,6 +111,14 @@ impl<'a> Connection<'a> {
             }
         };
 
+        if frame.header.length > self.connection_shared_state.borrow().local_settings.max_frame_size {
+            self.shutdown_connection(error::HttpError::ConnectionError(
+                error::ErrorCode::ProtocolError,
+                error::ErrorName::FramePayloadLargerThanSettingsValue
+            ));
+            return;
+        }
+
         // Check that the incoming frame is what was expected on this connection.
         if !self.frame_state_validator.is_okay(frame_type.clone(), frame.header.flags, frame.header.stream_id) {
             // (6.2) A receiver MUST treat the receipt of any other type of frame 
@@ -194,14 +202,6 @@ impl<'a> Connection<'a> {
                     self.shutdown_connection(error::HttpError::ConnectionError(
                         error::ErrorCode::ProtocolError,
                         error::ErrorName::MissingStreamIdentifierOnStreamFrame
-                    ));
-                    return;
-                }
-
-                if frame.header.length > self.connection_shared_state.borrow().local_settings.max_frame_size {
-                    self.shutdown_connection(error::HttpError::ConnectionError(
-                        error::ErrorCode::ProtocolError,
-                        error::ErrorName::DataFramePayloadLargerThanSettingsValue
                     ));
                     return;
                 }

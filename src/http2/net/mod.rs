@@ -180,6 +180,7 @@ impl<T, R, S> Server<T, R, S>
                                 );
                                 
                                 while let Some(response_frame) = connection.pull_frame() {
+                                    // TODO it's possible to crash the server here... no idea how but this can't just be unwrapped.
                                     ftx = ftx.send(response_frame).wait().unwrap();
                                 }
 
