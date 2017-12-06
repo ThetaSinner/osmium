@@ -260,7 +260,9 @@ impl Stream {
                             }
                             else {
                                 (
-                                    None,
+                                    Some(
+                                        state::StreamStateName::Closed(state.into())   
+                                    ),
                                     Some(
                                         error::HttpError::StreamError(
                                             error::ErrorCode::ProtocolError,
@@ -309,7 +311,9 @@ impl Stream {
                             // (6.9) A receiver MUST treat the receipt of a WINDOW_UPDATE frame with an flow-control 
                             // window increment of 0 as a stream error (Section 5.4.2) of type PROTOCOL_ERROR
                             (
-                                None,
+                                Some(
+                                    state::StreamStateName::Closed(state.into())
+                                ),
                                 Some(
                                     error::HttpError::StreamError(
                                         error::ErrorCode::ProtocolError,
@@ -450,7 +454,9 @@ impl Stream {
                         // or RST_STREAM, for a stream that is in this state, it MUST respond with a stream 
                         // error (Section 5.4.2) of type STREAM_CLOSED.
                         (
-                            None,
+                            Some(
+                                state::StreamStateName::Closed(state.into())   
+                            ),
                             Some(
                                 error::HttpError::StreamError(
                                     error::ErrorCode::StreamClosed,
@@ -483,7 +489,7 @@ impl Stream {
                         // (5.1) An endpoint that receives any frame other than PRIORITY after receiving 
                         // a RST_STREAM MUST treat that as a stream error (Section 5.4.2) of type STREAM_CLOSED.
                         (
-                            None,
+                            None, // On stream error the state normally transitions to closed, but we're already closed.
                             Some(
                                 error::HttpError::StreamError(
                                     error::ErrorCode::StreamClosed,
@@ -515,9 +521,11 @@ impl Stream {
 
         log_stream_post_recv!("Post receive", self.id, self.state_name);
 
-        // TODO should not try to process if an error occurred?
-        // Process the request if it is fully received.
-        self.try_start_process(app, hpack_send_context);
+        // The least bad error would still terminate this stream, so there's no need to process the request.
+        if opt_err.is_none() {
+            // Process the request if it is fully received.
+            self.try_start_process(app, hpack_send_context);
+        }
 
         opt_err
     }

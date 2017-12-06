@@ -390,121 +390,148 @@ impl<'a> Connection<'a> {
               R: convert::From<streaming::StreamRequest>,
               S: convert::Into<streaming::StreamResponse>
     {
-        // TODO this methods is a mess because it needs to borrow self.streams twice. Make it better.
-
         let stream_id = frame.header.stream_id;
 
-        let mut temp_streams = Vec::new();
-        {
-            // Ensure there is always a stream with the current identifier.
-            if !self.streams.contains_key(&stream_id) {
-                self.streams.insert(
-                    stream_id,
-                    streaming::Stream::new(stream_id, self.connection_shared_state.clone())
-                );
-
-                if stream_id <= self.highest_remote_initiated_stream_identifier {
-                    // TODO handle connection shutdown.
-                    panic!("Invalid stream identifier sent by client.");
-                }
-                else {
-                    self.highest_remote_initiated_stream_identifier = stream_id;
-                }
-            }
-
-            let stream = self.streams.get_mut(&stream_id).unwrap();
-
-            let stream_response = stream.recv(
-                framing::StreamFrame {
-                    // TODO constructor for converting the header.
-                    header: framing::StreamFrameHeader {
-                        length: frame.header.length,
-                        frame_type: frame_type,
-                        flags: frame.header.flags
+        let mut temp_streams = match self.do_move_to_stream(frame_type, stream_id, frame, app) {
+            Ok(temp_streams) => temp_streams,
+            Err(err) => {
+                match err {
+                    error::HttpError::ConnectionError(code, msg) => {
+                        self.shutdown_connection(error::HttpError::ConnectionError(
+                            code, msg
+                        ));
+                        return;
                     },
-                    payload: frame.payload
-                },
-                &mut self.hpack_send_context,
-                &mut self.hpack_recv_context,
-                app
-            );
-
-            // TODO handle the error. Because it might kill the stream or the connection, it cannot be ignored.
-            if let Some(err) = stream_response {
-                error!("Error on stream {}. The error was {:?}", frame.header.stream_id, err);
-            }
-
-            // TODO does the stream build its error or does the error frame get built and sent here.
-
-            // For each push promise, creates a new stream which is in the reserved state and queues that new stream
-            // for processing later.
-            while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
-                let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_shared_state.clone(), stream_request);
-
-                temp_streams.push((promised_stream_id, promise_stream));
-                self.promised_streams_queue.push_front(promised_stream_id);
-            }
-
-            // The below is essentially reconstructing part of a response, starting from the frame which exceeds the 
-            // send window up to the end of the response. 
-            // It could be made more efficient by keeping the response in a block when fetching it from the stream. However,
-            // this impacts the server's ability to multiplex and doesn't allow other flow controlled frame types to be 
-            // added in the future.
-
-            // TODO the code below could easily be split out into another function?
-
-            // Fetch any send frames which have been generated on the stream.
-            let mut is_blocked = self.stream_blocker.is_blocking(stream_id);
-            let stream_frames = stream.fetch_send_frames();
-            let mut stream_frame_iter = stream_frames.into_iter().rev();
-            while let Some(frame) = stream_frame_iter.next() {
-                match frame.get_frame_type() {
-                    framing::FrameType::Data => {
-                        if is_blocked {
-                            self.stream_blocker.block_frame(stream_id, frame);
-                        }
-                        else {
-                            if frame.get_length() as u32 > self.send_window {
-                                // Must not send, block the stream.
-                                self.stream_blocker.block_frame(stream_id, frame);
-
-                                is_blocked = true;
-                            }
-                            else {
-                                // The frame should be sent, so update the send window.
-                                self.send_window -= frame.get_length() as u32;
-                                self.send_frames.push_front(
-                                    Box::new(frame).compress_frame(stream_id)
-                                );
-                            }
-                        }
-                    },
-                    framing::FrameType::Headers => {
-                        if is_blocked {
-                            self.stream_blocker.block_frame(stream_id, frame);
-                        }
-                        else {
-                            // Not blocked so just send.
-                            self.send_frames.push_front(
-                                Box::new(frame).compress_frame(stream_id)
-                            );
-                        }
-                    },
-                    _ => {
-                        // Not a controlled frame, just send.
-                        self.send_frames.push_front(
-                            Box::new(frame).compress_frame(stream_id)
-                        );
+                    error::HttpError::StreamError(code, _) => {
+                        // TODO make sure this gets logged somewhere, because the message has to be discarded.
+                        let reset_stream_frame = framing::reset_stream::ResetStreamFrameCompressModel::new(code as u32);
+                        self.push_send_frame(Box::new(reset_stream_frame), stream_id);
+                        return;
                     }
                 }
             }
-
-            info!("Blocked streams {:?}", self.stream_blocker.get_unblock_priorities());
-        }
+        };
 
         while let Some((promised_stream_id, promised_stream)) = temp_streams.pop() {
             self.streams.insert(promised_stream_id, promised_stream);
         }
+    }
+
+    pub fn do_move_to_stream<T, R, S>(&mut self, frame_type: framing::FrameType, stream_id: streaming::StreamId, frame: framing::Frame, app: &T) -> Result<Vec<(streaming::StreamId, streaming::Stream)>, error::HttpError> 
+        where T: server_trait::OsmiumServer<Request=R, Response=S>,
+              R: convert::From<streaming::StreamRequest>,
+              S: convert::Into<streaming::StreamResponse>
+    {
+        let mut temp_streams = Vec::new();
+
+        // Ensure there is always a stream with the current identifier.
+        if !self.streams.contains_key(&stream_id) {
+            self.streams.insert(
+                stream_id,
+                streaming::Stream::new(stream_id, self.connection_shared_state.clone())
+            );
+
+            if stream_id <= self.highest_remote_initiated_stream_identifier {
+                // TODO handle connection shutdown.
+                panic!("Invalid stream identifier sent by client.");
+            }
+            else {
+                self.highest_remote_initiated_stream_identifier = stream_id;
+            }
+        }
+
+        let stream = self.streams.get_mut(&stream_id).unwrap();
+
+        let stream_response = stream.recv(
+            framing::StreamFrame {
+                // TODO constructor for converting the header.
+                header: framing::StreamFrameHeader {
+                    length: frame.header.length,
+                    frame_type: frame_type,
+                    flags: frame.header.flags
+                },
+                payload: frame.payload
+            },
+            &mut self.hpack_send_context,
+            &mut self.hpack_recv_context,
+            app
+        );
+
+        // ----> stray todo
+        // TODO would be really helpful if the line number and file was logged everywhere! :)
+
+        // Because stream errors might affect the connection state, they aren't handled on the stream.
+        // The internal error representation is returned from the stream to be processed here.
+        if let Some(err) = stream_response {
+            return Err(err);
+        }
+
+        // For each push promise, creates a new stream which is in the reserved state and queues that new stream
+        // for processing later.
+        while let Some((promised_stream_id, stream_request)) = stream.fetch_push_promise() {
+            let promise_stream = streaming::Stream::new_promise(promised_stream_id, self.connection_shared_state.clone(), stream_request);
+
+            temp_streams.push((promised_stream_id, promise_stream));
+            self.promised_streams_queue.push_front(promised_stream_id);
+        }
+
+        // The below is essentially reconstructing part of a response, starting from the frame which exceeds the 
+        // send window up to the end of the response. 
+        // It could be made more efficient by keeping the response in a block when fetching it from the stream. However,
+        // this impacts the server's ability to multiplex and doesn't allow other flow controlled frame types to be 
+        // added in the future.
+
+        // TODO the code below could easily be split out into another function?
+
+        // Fetch any send frames which have been generated on the stream.
+        let mut is_blocked = self.stream_blocker.is_blocking(stream_id);
+        let stream_frames = stream.fetch_send_frames();
+        let mut stream_frame_iter = stream_frames.into_iter().rev();
+        while let Some(frame) = stream_frame_iter.next() {
+            match frame.get_frame_type() {
+                framing::FrameType::Data => {
+                    if is_blocked {
+                        self.stream_blocker.block_frame(stream_id, frame);
+                    }
+                    else {
+                        if frame.get_length() as u32 > self.send_window {
+                            // Must not send, block the stream.
+                            self.stream_blocker.block_frame(stream_id, frame);
+
+                            is_blocked = true;
+                        }
+                        else {
+                            // The frame should be sent, so update the send window.
+                            self.send_window -= frame.get_length() as u32;
+                            self.send_frames.push_front(
+                                Box::new(frame).compress_frame(stream_id)
+                            );
+                        }
+                    }
+                },
+                framing::FrameType::Headers => {
+                    if is_blocked {
+                        self.stream_blocker.block_frame(stream_id, frame);
+                    }
+                    else {
+                        // Not blocked so just send.
+                        self.send_frames.push_front(
+                            Box::new(frame).compress_frame(stream_id)
+                        );
+                    }
+                },
+                _ => {
+                    // Not a controlled frame, just send.
+                    self.send_frames.push_front(
+                        Box::new(frame).compress_frame(stream_id)
+                    );
+                }
+            }
+        }
+
+        info!("Blocked streams {:?}", self.stream_blocker.get_unblock_priorities());
+
+        Ok(temp_streams)
     }
 
     /// N.B. GoAway frames sent directly to this method will not end the connection. Use `shutdown_connection` instead.
