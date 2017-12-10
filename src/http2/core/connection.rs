@@ -426,18 +426,27 @@ impl<'a> Connection<'a> {
 
         // Ensure there is always a stream with the current identifier.
         if !self.streams.contains_key(&stream_id) {
+            // (5.1.1) Streams initiated by a client MUST use odd-numbered stream identifiers
+            if stream_id % 2 != 1 {
+                return Err(error::HttpError::ConnectionError(
+                    error::ErrorCode::ProtocolError,
+                    error::ErrorName::EvenStreamIdentiferOnClientInitiatedStream
+                ));
+            }
+
+            if stream_id <= self.highest_remote_initiated_stream_identifier {
+                return Err(error::HttpError::ConnectionError(
+                    error::ErrorCode::ProtocolError,
+                    error::ErrorName::ExpectedHigherStreamIdentiferForNewStream
+                ));
+            }
+
+            self.highest_remote_initiated_stream_identifier = stream_id;
+
             self.streams.insert(
                 stream_id,
                 streaming::Stream::new(stream_id, self.connection_shared_state.clone())
             );
-
-            if stream_id <= self.highest_remote_initiated_stream_identifier {
-                // TODO handle connection shutdown.
-                panic!("Invalid stream identifier sent by client.");
-            }
-            else {
-                self.highest_remote_initiated_stream_identifier = stream_id;
-            }
         }
 
         let stream = self.streams.get_mut(&stream_id).unwrap();

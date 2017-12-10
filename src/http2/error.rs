@@ -116,7 +116,9 @@ pub enum ErrorName {
     SettingsAcknowledgementWithNonZeroPayloadLength,
     SettingsFramePayloadSizeNotAMultipleOfSix,
     FramePayloadLargerThanSettingsValue,
-    UnexpectedResetAfterStreamResetByRemote
+    UnexpectedResetAfterStreamResetByRemote,
+    ExpectedHigherStreamIdentiferForNewStream,
+    EvenStreamIdentiferOnClientInitiatedStream
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -178,6 +180,12 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::UnexpectedResetAfterStreamResetByRemote => {
                 "Received unexpected reset stream after the stream had been reset by the remote"
+            },
+            ErrorName::ExpectedHigherStreamIdentiferForNewStream => {
+                "Expected higher stream identifer for new stream"
+            },
+            ErrorName::EvenStreamIdentiferOnClientInitiatedStream => {
+                "Even stream identifer on client initiated stream"
             }
         }.to_owned().as_bytes().to_vec()
     }
