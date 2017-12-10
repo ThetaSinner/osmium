@@ -45,6 +45,18 @@ impl StreamState<StateIdle> {
     }
 }
 
+#[derive(Debug)]
+pub enum StreamClosedReason {
+    StreamEnded,
+    ResetLocal,
+    ResetRemote
+}
+
+#[derive(Debug)]
+pub struct StreamClosedInfo {
+    pub reason: StreamClosedReason
+}
+
 // Declare types for each state.
 #[derive(Debug)]
 pub struct StateIdle;
@@ -61,7 +73,9 @@ pub struct StateHalfClosedLocal;
 #[derive(Debug)]
 pub struct StateHalfClosedRemote;
 #[derive(Debug)]
-pub struct StateClosed;
+pub struct StateClosed {
+    pub info: StreamClosedInfo
+}
 
 // Declare valid transitions between states.
 
@@ -76,9 +90,7 @@ impl<'a> From<&'a StreamState<StateIdle>> for StreamState<StateOpen> {
 impl<'a> From<(&'a StreamState<StateIdle>, streaming::StreamRequest)> for StreamState<StateReservedLocal> {
     fn from((_state_wrapper, stream_request): (&StreamState<StateIdle>, streaming::StreamRequest)) -> StreamState<StateReservedLocal> {
         StreamState {
-            state: StateReservedLocal {
-                stream_request: stream_request
-            }
+            state: StateReservedLocal { stream_request }
         }
     }
 }
@@ -99,10 +111,10 @@ impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateHalfClos
     }
 }
 
-impl<'a> From<&'a StreamState<StateReservedLocal>> for StreamState<StateClosed> {
-    fn from(_state_wrapper: &StreamState<StateReservedLocal>) -> StreamState<StateClosed> {
+impl<'a> From<(&'a StreamState<StateReservedLocal>, StreamClosedInfo)> for StreamState<StateClosed> {
+    fn from((_state_wrapper, info): (&StreamState<StateReservedLocal>, StreamClosedInfo)) -> StreamState<StateClosed> {
         StreamState {
-            state: StateClosed
+            state: StateClosed { info }
         }
     }
 }
@@ -115,10 +127,10 @@ impl<'a> From<&'a StreamState<StateReservedRemote>> for StreamState<StateHalfClo
     }
 }
 
-impl<'a> From<&'a StreamState<StateReservedRemote>> for StreamState<StateClosed> {
-    fn from(_state_wrapper: &StreamState<StateReservedRemote>) -> StreamState<StateClosed> {
+impl<'a> From<(&'a StreamState<StateReservedRemote>, StreamClosedInfo)> for StreamState<StateClosed> {
+    fn from((_state_wrapper, info): (&StreamState<StateReservedRemote>, StreamClosedInfo)) -> StreamState<StateClosed> {
         StreamState {
-            state: StateClosed
+            state: StateClosed { info }
         }
     }
 }
@@ -131,10 +143,10 @@ impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateHalfClosedRemote>
     }
 }
 
-impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateClosed> {
-    fn from(_state_wrapper: &StreamState<StateOpen>) -> StreamState<StateClosed> {
+impl<'a> From<(&'a StreamState<StateOpen>, StreamClosedInfo)> for StreamState<StateClosed> {
+    fn from((_state_wrapper, info): (&StreamState<StateOpen>, StreamClosedInfo)) -> StreamState<StateClosed> {
         StreamState {
-            state: StateClosed
+            state: StateClosed { info }
         }
     }
 }
@@ -147,18 +159,18 @@ impl<'a> From<&'a StreamState<StateOpen>> for StreamState<StateHalfClosedLocal> 
     }
 }
 
-impl<'a> From<&'a StreamState<StateHalfClosedRemote>> for StreamState<StateClosed> {
-    fn from(_state_wrapper: &StreamState<StateHalfClosedRemote>) -> StreamState<StateClosed> {
+impl<'a> From<(&'a StreamState<StateHalfClosedRemote>, StreamClosedInfo)> for StreamState<StateClosed> {
+    fn from((_state_wrapper, info): (&StreamState<StateHalfClosedRemote>, StreamClosedInfo)) -> StreamState<StateClosed> {
         StreamState {
-            state: StateClosed
+            state: StateClosed { info }
         }
     }
 }
 
-impl<'a> From<&'a StreamState<StateHalfClosedLocal>> for StreamState<StateClosed> {
-    fn from(_state_wrapper: &StreamState<StateHalfClosedLocal>) -> StreamState<StateClosed> {
+impl<'a> From<(&'a StreamState<StateHalfClosedLocal>, StreamClosedInfo)> for StreamState<StateClosed> {
+    fn from((_state_wrapper, info): (&StreamState<StateHalfClosedLocal>, StreamClosedInfo)) -> StreamState<StateClosed> {
         StreamState {
-            state: StateClosed
+            state: StateClosed { info }
         }
     }
 }

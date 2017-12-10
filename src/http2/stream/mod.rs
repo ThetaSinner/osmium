@@ -261,7 +261,14 @@ impl Stream {
                             else {
                                 (
                                     Some(
-                                        state::StreamStateName::Closed(state.into())   
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
                                     ),
                                     Some(
                                         error::HttpError::StreamError(
@@ -277,6 +284,7 @@ impl Stream {
                         }
                     },
                     framing::FrameType::Priority => {
+                        // TODO does priority actually get to the stream? don't thing it does
                         unimplemented!();
                     },
                     framing::FrameType::ResetStream => {
@@ -291,7 +299,15 @@ impl Stream {
                         }
 
                         (
-                            Some(state::StreamStateName::Closed(state.into())),
+                            Some(state::StreamStateName::Closed(
+                                    (
+                                        state,
+                                        state::StreamClosedInfo {
+                                            reason: state::StreamClosedReason::ResetRemote
+                                        }
+                                    ).into()
+                                )
+                            ),
                             None
                         )
                     },
@@ -312,7 +328,14 @@ impl Stream {
                             // window increment of 0 as a stream error (Section 5.4.2) of type PROTOCOL_ERROR
                             (
                                 Some(
-                                    state::StreamStateName::Closed(state.into())
+                                    state::StreamStateName::Closed(
+                                        (
+                                            state,
+                                            state::StreamClosedInfo {
+                                                reason: state::StreamClosedReason::ResetLocal
+                                            }
+                                        ).into()
+                                    )
                                 ),
                                 Some(
                                     error::HttpError::StreamError(
@@ -445,7 +468,15 @@ impl Stream {
                         }
 
                         (
-                            Some(state::StreamStateName::Closed(state.into())),
+                            Some(state::StreamStateName::Closed(
+                                    (
+                                        state,
+                                        state::StreamClosedInfo {
+                                            reason: state::StreamClosedReason::ResetRemote
+                                        }
+                                    ).into()
+                                )
+                            ),
                             None
                         )
                     },
@@ -454,8 +485,14 @@ impl Stream {
                         // or RST_STREAM, for a stream that is in this state, it MUST respond with a stream 
                         // error (Section 5.4.2) of type STREAM_CLOSED.
                         (
-                            Some(
-                                state::StreamStateName::Closed(state.into())   
+                            Some(state::StreamStateName::Closed(
+                                    (
+                                        state,
+                                        state::StreamClosedInfo {
+                                            reason: state::StreamClosedReason::ResetLocal
+                                        }
+                                    ).into()
+                                )
                             ),
                             Some(
                                 error::HttpError::StreamError(
@@ -467,36 +504,102 @@ impl Stream {
                     }
                 }
             },
-            state::StreamStateName::Closed(_) => {
-                match frame.header.frame_type {
-                    framing::FrameType::Priority => {
-                        // TODO log and discard instead panic.
-                        unimplemented!();
+            state::StreamStateName::Closed(ref stream_closed_info) => {
+                // TODO after a while this stream needs to be deleted, at which point receiving any frames will be handled at the connection level.
+                // so it's safe enough to assume that these filters won't run on for ever.
+
+                match stream_closed_info.state.info.reason {
+                    // The stream has ended naturally, that means that it's been through half-closed remote. Therefore,
+                    // the remote knows that it has send and end stream so has no business sending anything but the 
+                    // frames which have been allowed here.
+                    state::StreamClosedReason::StreamEnded => {
+                        match frame.header.frame_type {
+                            framing::FrameType::WindowUpdate => {
+                                // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
+                                (None, None)
+                            },
+                            framing::FrameType::ResetStream => {
+                                // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
+                                (None, None)
+                            },
+                            _ => {
+                                (
+                                    None,
+                                    Some(
+                                        error::HttpError::ConnectionError(
+                                            error::ErrorCode::StreamClosed,
+                                            error::ErrorName::StreamIsClosed
+                                        )
+                                    )
+                                )
+                            }
+                        }
                     },
-                    framing::FrameType::WindowUpdate => {
-                        // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
-                        (None, None)
-                    },
-                    framing::FrameType::ResetStream => {
-                        // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
-                        (None, None)
+                    state::StreamClosedReason::ResetRemote => {
+                        // When the stream was reset by the remote, we should not receive anything else.
+                        match frame.header.frame_type {
+                            framing::FrameType::ResetStream => {
+                                // Unless we're misbehaving and sending long after the remote reset the stream, we shouldn't get another reset stream.
+                                // Assuming the server is behaving correctly, we might end up looping if we respond to this reset stream with a reset stream
+                                // so terminate the connection instead.
+                                (
+                                    None,
+                                    Some(
+                                        error::HttpError::ConnectionError(
+                                            error::ErrorCode::ProtocolError,
+                                            error::ErrorName::UnexpectedResetAfterStreamResetByRemote
+                                        )
+                                    )
+                                )
+                            },
+                            _ => {
+                                (
+                                    None,
+                                    Some(
+                                        error::HttpError::StreamError(
+                                            error::ErrorCode::StreamClosed,
+                                            error::ErrorName::StreamIsClosed
+                                        )
+                                    )
+                                )
+                            }
+                        }
                     },
                     _ => {
-                        // TODO there is more to do here. There is a small race condition, where the stream might be closed
-                        // because we've sent a reset or end stream but they haven't been received by the peer.
-                        // There are some rules about what can be discarded without error, and what is a more serious error.
+                        // TODO this is the remaining case ResetLocal. Need to allow receive of some things for a little time
+                        // after the reset has been sent.
 
-                        // (5.1) An endpoint that receives any frame other than PRIORITY after receiving 
-                        // a RST_STREAM MUST treat that as a stream error (Section 5.4.2) of type STREAM_CLOSED.
-                        (
-                            None, // On stream error the state normally transitions to closed, but we're already closed.
-                            Some(
-                                error::HttpError::StreamError(
-                                    error::ErrorCode::StreamClosed,
-                                    error::ErrorName::StreamIsClosed
+                        match frame.header.frame_type {
+                            framing::FrameType::Priority => {
+                                // TODO log and discard instead panic.
+                                unimplemented!();
+                            },
+                            framing::FrameType::WindowUpdate => {
+                                // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
+                                (None, None)
+                            },
+                            framing::FrameType::ResetStream => {
+                                // (5.1) Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received in this state
+                                (None, None)
+                            },
+                            _ => {
+                                // TODO there is more to do here. There is a small race condition, where the stream might be closed
+                                // because we've sent a reset or end stream but they haven't been received by the peer.
+                                // There are some rules about what can be discarded without error, and what is a more serious error.
+
+                                // (5.1) An endpoint that receives any frame other than PRIORITY after receiving 
+                                // a RST_STREAM MUST treat that as a stream error (Section 5.4.2) of type STREAM_CLOSED.
+                                (
+                                    None, // On stream error the state normally transitions to closed, but we're already closed.
+                                    Some(
+                                        error::HttpError::StreamError(
+                                            error::ErrorCode::StreamClosed,
+                                            error::ErrorName::StreamIsClosed
+                                        )
+                                    )
                                 )
-                            )
-                        )
+                            }
+                        }
                     }
                 }
             },
@@ -590,7 +693,14 @@ impl Stream {
                             if framing::headers::is_end_stream(frame.get_flags()) {
                                 new_state = match new_state {
                                     state::StreamStateName::HalfClosedRemote(ref state) => {
-                                        state::StreamStateName::Closed(state.into())
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::StreamEnded
+                                                }
+                                            ).into()
+                                        )
                                     },
                                     _ => {
                                         unreachable!();
@@ -638,11 +748,6 @@ impl Stream {
                             
                             new_state
                         },
-                        framing::FrameType::ResetStream => {
-                            temp_send_frames.push(frame);
-
-                            Some(state::StreamStateName::Closed(state.into()))
-                        },
                         framing::FrameType::PushPromise => {
                             temp_send_frames.push(frame);
 
@@ -671,7 +776,14 @@ impl Stream {
                         framing::FrameType::Data => {
                             let new_state = if framing::data::is_end_stream(frame.get_flags()) {
                                 Some(
-                                    state::StreamStateName::Closed(state.into())
+                                    state::StreamStateName::Closed(
+                                        (
+                                            state,
+                                            state::StreamClosedInfo {
+                                                reason: state::StreamClosedReason::StreamEnded
+                                            }
+                                        ).into()
+                                    )
                                 )
                             }
                             else {
@@ -685,7 +797,14 @@ impl Stream {
                         framing::FrameType::Headers => {
                             let new_state = if framing::headers::is_end_stream(frame.get_flags()) {
                                 Some(
-                                    state::StreamStateName::Closed(state.into())
+                                    state::StreamStateName::Closed(
+                                        (
+                                            state,
+                                            state::StreamClosedInfo {
+                                                reason: state::StreamClosedReason::StreamEnded
+                                            }
+                                        ).into()
+                                    )
                                 )
                             }
                             else {
@@ -695,11 +814,6 @@ impl Stream {
                             temp_send_frames.push(frame);
                             
                             new_state
-                        },
-                        framing::FrameType::ResetStream => {
-                            temp_send_frames.push(frame);
-
-                            Some(state::StreamStateName::Closed(state.into()))
                         },
                         framing::FrameType::PushPromise => {
                             temp_send_frames.push(frame);

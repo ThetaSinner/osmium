@@ -115,7 +115,8 @@ pub enum ErrorName {
     ConnectionFlowControlWindowNotRespected,
     SettingsAcknowledgementWithNonZeroPayloadLength,
     SettingsFramePayloadSizeNotAMultipleOfSix,
-    FramePayloadLargerThanSettingsValue
+    FramePayloadLargerThanSettingsValue,
+    UnexpectedResetAfterStreamResetByRemote
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -174,6 +175,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::FramePayloadLargerThanSettingsValue => {
                 "frame payload larger than settings value"
+            },
+            ErrorName::UnexpectedResetAfterStreamResetByRemote => {
+                "Received unexpected reset stream after the stream had been reset by the remote"
             }
         }.to_owned().as_bytes().to_vec()
     }
