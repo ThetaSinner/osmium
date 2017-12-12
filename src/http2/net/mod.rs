@@ -252,7 +252,7 @@ impl<T, R, S> Server<T, R, S>
                                         Ok(future::Loop::Break(()))
                                     },
                                     Err(future::Either::A((e, _))) => {
-                                        error!("Connection terminated by the remote [{}]", e);
+                                        info!("Connection terminated by the remote [{}]", e);
                                         Ok(future::Loop::Break(()))
                                     },
                                     Err(future::Either::B((e, _))) => {
