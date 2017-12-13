@@ -156,7 +156,7 @@ impl<'a> Connection<'a> {
                             // TODO the server has no way of managing the connection thread. That is, the thread is only
                             // active when frames are received which means the connection is active and there's no point
                             // sending a ping.
-                            panic!("can't handle ping response");
+                            error!("can't handle ping response");
                         }
                         else {
                             // TODO add a second constructor method which builds a response.
