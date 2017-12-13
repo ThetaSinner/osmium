@@ -283,33 +283,45 @@ impl Stream {
                             (None, None)
                         }
                     },
-                    framing::FrameType::Priority => {
-                        // TODO does priority actually get to the stream? don't thing it does
-                        unimplemented!();
-                    },
                     framing::FrameType::ResetStream => {
-                        let reset_stream_frame = framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter());
-
-                        // Log the error code for the stream reset.
-                        if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
-                            warn!("Stream reset, error code {:?}", error_code);
-                        }
-                        else {
-                            error!("Stream was reset, with unrecognised error code");
-                        }
-
-                        (
-                            Some(state::StreamStateName::Closed(
-                                    (
-                                        state,
-                                        state::StreamClosedInfo {
-                                            reason: state::StreamClosedReason::ResetRemote
-                                        }
-                                    ).into()
+                        match framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter()) {
+                            Err(error) => {
+                                (
+                                    Some(state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    Some(error)
                                 )
-                            ),
-                            None
-                        )
+                            },
+                            Ok(reset_stream_frame) => {
+                                // Log the error code for the stream reset.
+                                if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
+                                    warn!("Stream reset, error code {:?}", error_code);
+                                }
+                                else {
+                                    error!("Stream was reset, with unrecognised error code");
+                                }
+
+                                (
+                                    Some(state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetRemote
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    None
+                                )
+                            }
+                        }
                     },
                     framing::FrameType::WindowUpdate => {
                         // (6.9) The WINDOW_UPDATE frame can be specific to a stream or to the 
@@ -453,32 +465,45 @@ impl Stream {
                         // TODO there is an error to be handled here if the frame decode fails.
                         (None, None)
                     },
-                    framing::FrameType::Priority => {
-                        unimplemented!();
-                    },
                     framing::FrameType::ResetStream => {
-                        let reset_stream_frame = framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter());
+                        match framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter()) {
+                            Ok(reset_stream_frame) => {
+                                // Log the error code for the stream reset.
+                                if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
+                                    warn!("Stream reset, error code {:?}", error_code);
+                                }
+                                else {
+                                    error!("Stream was reset, with unrecognised error code");
+                                }
 
-                        // Log the error code for the stream reset.
-                        if let Some(error_code) = error::to_error_code(reset_stream_frame.get_error_code()) {
-                            warn!("Stream reset, error code {:?}", error_code);
-                        }
-                        else {
-                            error!("Stream was reset, with unrecognised error code");
-                        }
-
-                        (
-                            Some(state::StreamStateName::Closed(
-                                    (
-                                        state,
-                                        state::StreamClosedInfo {
-                                            reason: state::StreamClosedReason::ResetRemote
-                                        }
-                                    ).into()
+                                (
+                                    Some(state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetRemote
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    None
                                 )
-                            ),
-                            None
-                        )
+                            },
+                            Err(error) => {
+                                (
+                                    Some(state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    Some(error)
+                                )
+                            }
+                        }
                     },
                     _ => {
                         // (5.1) If an endpoint receives additional frames, other than WINDOW_UPDATE, PRIORITY, 

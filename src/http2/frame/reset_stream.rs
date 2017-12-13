@@ -21,6 +21,7 @@ use std::vec::IntoIter;
 // osmium
 use super::CompressibleHttpFrame;
 use super::FrameType;
+use http2::error;
 
 #[derive(Debug)]
 pub struct ResetStreamFrameCompressModel {
@@ -68,17 +69,21 @@ pub struct ResetStreamFrame {
 }
 
 impl ResetStreamFrame {
-    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Self {
-        // TODO handle error
-        assert_eq!(4, frame_header.length);
+    pub fn new(frame_header: &super::StreamFrameHeader, frame: &mut IntoIter<u8>) -> Result<Self, error::HttpError> {
+        if frame_header.length != 4 {
+            return Err(error::HttpError::ConnectionError(
+                error::ErrorCode::FrameSizeError,
+                error::ErrorName::ResetStreamFrameWithInvalidSize
+            ));
+        }
 
-        ResetStreamFrame {
+        Ok(ResetStreamFrame {
             error_code:
                 (frame.next().unwrap() as u32) << 24 +
                 (frame.next().unwrap() as u32) << 16 +
                 (frame.next().unwrap() as u32) << 8 +
                 (frame.next().unwrap() as u32)
-        }
+        })
     }
 
     pub fn get_error_code(&self) -> u32 {

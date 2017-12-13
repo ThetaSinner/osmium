@@ -118,7 +118,8 @@ pub enum ErrorName {
     FramePayloadLargerThanSettingsValue,
     UnexpectedResetAfterStreamResetByRemote,
     ExpectedHigherStreamIdentiferForNewStream,
-    EvenStreamIdentiferOnClientInitiatedStream
+    EvenStreamIdentiferOnClientInitiatedStream,
+    ResetStreamFrameWithInvalidSize
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -186,6 +187,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::EvenStreamIdentiferOnClientInitiatedStream => {
                 "Even stream identifer on client initiated stream"
+            },
+            ErrorName::ResetStreamFrameWithInvalidSize => {
+                "Reset stream frame with invalid size"
             }
         }.to_owned().as_bytes().to_vec()
     }
