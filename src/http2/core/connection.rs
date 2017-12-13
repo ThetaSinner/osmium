@@ -103,14 +103,6 @@ impl<'a> Connection<'a> {
             return;
         }
 
-        let frame_type = match frame.header.frame_type {
-            Some(ref frame_type) => frame_type.clone(),
-            None => {
-                debug!("Received unrecognised frame type");
-                return;
-            }
-        };
-
         // TODO this possibly shouldn't be read into the server. It's complicated to reject but 
         // would save read time and memory.
         if frame.header.length > self.connection_shared_state.borrow().local_settings.max_frame_size {
@@ -122,7 +114,7 @@ impl<'a> Connection<'a> {
         }
 
         // Check that the incoming frame is what was expected on this connection.
-        if !self.frame_state_validator.is_okay(frame_type.clone(), frame.header.flags, frame.header.stream_id) {
+        if !self.frame_state_validator.is_okay(frame.header.frame_type.clone(), frame.header.flags, frame.header.stream_id) {
             // (6.2) A receiver MUST treat the receipt of any other type of frame 
             // or a frame on a different stream as a connection error (Section 5.4.1) 
             // of type PROTOCOL_ERROR.
@@ -131,6 +123,14 @@ impl<'a> Connection<'a> {
                 error::ErrorName::HeaderBlockInterupted
             ));
             return;
+        }
+
+        let frame_type = match frame.header.frame_type {
+            Some(ref frame_type) => frame_type.clone(),
+            None => {
+                debug!("Received unrecognised frame type");
+                return;
+            }
         };
 
         match frame_type {

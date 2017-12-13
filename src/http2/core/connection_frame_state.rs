@@ -34,35 +34,51 @@ impl ConnectionFrameStateValidator {
     // a CONTINUATION frame for the same stream. A receiver MUST treat the 
     // receipt of any other type of frame or a frame on a different stream 
     // as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
-    pub fn is_okay(&mut self, frame_type: framing::FrameType, flags: u8, stream_id: StreamId) -> bool {
-        let (new_name, okay) = match self.name {
-            ConnectionFrameStateName::AllowAny(ref s) => {
-                if frame_type == framing::FrameType::Headers && !framing::headers::is_end_headers(flags) {
-                    (
-                        Some(ConnectionFrameStateName::ReceiveContinuation(
-                            (s, stream_id).into()
-                        )),
-                        true
-                    )
-                }
-                else {
-                    (None, true)
+    pub fn is_okay(&mut self, frame_type: Option<framing::FrameType>, flags: u8, stream_id: StreamId) -> bool {
+        let (new_name, okay) = match frame_type {
+            Some(frame_type) => {
+                match self.name {
+                    ConnectionFrameStateName::AllowAny(ref s) => {
+                        if frame_type == framing::FrameType::Headers && !framing::headers::is_end_headers(flags) {
+                            (
+                                Some(ConnectionFrameStateName::ReceiveContinuation(
+                                    (s, stream_id).into()
+                                )),
+                                true
+                            )
+                        }
+                        else {
+                            (None, true)
+                        }
+                    },
+                    ConnectionFrameStateName::ReceiveContinuation(ref s) => {
+                        if stream_id == s.get_stream_id() && frame_type == framing::FrameType::Continuation {
+                            if framing::continuation::is_end_headers(flags) {
+                                (
+                                    Some(ConnectionFrameStateName::AllowAny(s.into())),
+                                    true
+                                )
+                            }
+                            else {
+                                (None, true)
+                            }
+                        }
+                        else {
+                            (None, false)
+                        }
+                    }
                 }
             },
-            ConnectionFrameStateName::ReceiveContinuation(ref s) => {
-                if stream_id == s.get_stream_id() && frame_type == framing::FrameType::Continuation {
-                    if framing::continuation::is_end_headers(flags) {
-                        (
-                            Some(ConnectionFrameStateName::AllowAny(s.into())),
-                            true
-                        )
-                    }
-                    else {
+            None => {
+                match self.name {
+                    ConnectionFrameStateName::AllowAny(_) => {
+                        // When allowing any frame, an unknown frame must be allowed and does not change the state.
                         (None, true)
+                    },
+                    ConnectionFrameStateName::ReceiveContinuation(_) => {
+                        // When expecting a continuation frame, an unknown frame is a violation.
+                        (None, false)
                     }
-                }
-                else {
-                    (None, false)
                 }
             }
         };
