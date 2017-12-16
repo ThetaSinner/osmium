@@ -79,9 +79,9 @@ impl ResetStreamFrame {
 
         Ok(ResetStreamFrame {
             error_code:
-                (frame.next().unwrap() as u32) << 24 +
-                (frame.next().unwrap() as u32) << 16 +
-                (frame.next().unwrap() as u32) << 8 +
+                ((frame.next().unwrap() as u32) << 24) +
+                ((frame.next().unwrap() as u32) << 16) +
+                ((frame.next().unwrap() as u32) << 8) +
                 (frame.next().unwrap() as u32)
         })
     }

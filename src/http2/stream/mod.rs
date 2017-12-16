@@ -198,7 +198,7 @@ impl Stream {
                         // (5.1) Receiving any other frame than headers or push promise in this state
                         // must be treated as a connection error (Section 5.4.1) of type PROTOCOL_ERROR.
                         (
-                            None,
+                            None, // TODO should this close the connection?
                             Some(
                                 error::HttpError::ConnectionError(
                                     error::ErrorCode::ProtocolError,
