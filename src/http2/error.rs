@@ -119,7 +119,9 @@ pub enum ErrorName {
     UnexpectedResetAfterStreamResetByRemote,
     ExpectedHigherStreamIdentiferForNewStream,
     EvenStreamIdentiferOnClientInitiatedStream,
-    ResetStreamFrameWithInvalidSize
+    ResetStreamFrameWithInvalidSize,
+    WindowUpdateWouldCauseSendWindowToExceedLimit,
+    InvalidFrameLengthForConnectionWindowUpdateFrame
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -190,6 +192,12 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::ResetStreamFrameWithInvalidSize => {
                 "Reset stream frame with invalid size"
+            },
+            ErrorName::WindowUpdateWouldCauseSendWindowToExceedLimit => {
+                "Window update would cause send window to exceed limit"
+            },
+            ErrorName::InvalidFrameLengthForConnectionWindowUpdateFrame => {
+                "Invalid frame length for connection window update frame"
             }
         }.to_owned().as_bytes().to_vec()
     }

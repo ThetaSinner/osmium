@@ -27,6 +27,8 @@ pub mod window_update;
 pub mod continuation;
 pub mod synthetic;
 
+pub mod check;
+
 pub const FRAME_HEADER_SIZE: usize = 9;
 
 // Denoted 'R' in http2 Section 4.1

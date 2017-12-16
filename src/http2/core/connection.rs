@@ -33,6 +33,7 @@ use http2::core::connection_frame_state;
 use http2::core::stream_blocker;
 use http2::core::connection_shared_state;
 use http2::core::flow_control;
+use http2::frame::check as frame_checking;
 
 pub struct Connection<'a> {
     send_frames: VecDeque<Vec<u8>>,
@@ -213,19 +214,20 @@ impl<'a> Connection<'a> {
             },
             framing::FrameType::WindowUpdate => {
                 if streaming::is_connection_control_stream_id(frame.header.stream_id) {
-                    let window_update_frame = framing::window_update::WindowUpdateFrame::new_conn(&frame.header, &mut frame.payload.into_iter());
+                    let window_update_frame = frame_checking::window_update::check_conn_window_update(
+                        framing::window_update::WindowUpdateFrame::new_conn(&frame.header, &mut frame.payload.into_iter()),
+                        self.send_window
+                    );
 
-                    // TODO handle frame decode error.
-
-                    if window_update_frame.get_window_size_increment() == 0 {
-                        self.shutdown_connection(error::HttpError::ConnectionError(
-                            error::ErrorCode::ProtocolError,
-                            error::ErrorName::ZeroWindowSizeIncrement
-                        ));
-                    }
-                    else {
-                        self.send_window += window_update_frame.get_window_size_increment();
-                        self.try_unblock_streams();
+                    match window_update_frame {
+                        Ok(frame) => {
+                            self.send_window += frame.get_window_size_increment();
+                            self.try_unblock_streams();
+                        },
+                        Err(e) => {
+                            error!("Bad window update frame {:?}", e);
+                            self.shutdown_connection(e);
+                        }
                     }
                 }
                 else {

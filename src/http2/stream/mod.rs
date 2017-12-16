@@ -38,6 +38,7 @@ use shared::server_trait;
 use shared::connection_handle::ConnectionHandle;
 use http2::core::connection_shared_state::ConnectionSharedState;
 use shared::push_error;
+use http2::frame::check as frame_checking;
 
 /// Convenience typedef for stream identifiers.
 pub type StreamId = u32;
@@ -331,35 +332,32 @@ impl Stream {
                         
                         // Given the above we just assume that this window update is for this stream,
                         // otherwise the frame wouldn't have been send to this stream.
-                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
+                        let window_update_frame = frame_checking::window_update::check_stream_window_update(
+                            framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter()),
+                            self.send_window
+                        );
 
-                        // TODO handle window frame decode error.
-
-                        if window_update_frame.get_window_size_increment() == 0 {
-                            // (6.9) A receiver MUST treat the receipt of a WINDOW_UPDATE frame with an flow-control 
-                            // window increment of 0 as a stream error (Section 5.4.2) of type PROTOCOL_ERROR
-                            (
-                                Some(
-                                    state::StreamStateName::Closed(
-                                        (
-                                            state,
-                                            state::StreamClosedInfo {
-                                                reason: state::StreamClosedReason::ResetLocal
-                                            }
-                                        ).into()
-                                    )
-                                ),
-                                Some(
-                                    error::HttpError::StreamError(
-                                        error::ErrorCode::ProtocolError,
-                                        error::ErrorName::ZeroWindowSizeIncrement
-                                    )
+                        match window_update_frame {
+                            Ok(frame) => {
+                                self.send_window += frame.get_window_size_increment();
+                                
+                                (None, None)
+                            },
+                            Err(e) => {
+                                (
+                                    Some(
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    Some(e)
                                 )
-                            )
-                        }
-                        else {
-                            self.send_window += window_update_frame.get_window_size_increment();
-                            (None, None)
+                            }
                         }
                     },
                     framing::FrameType::Continuation => {
@@ -458,12 +456,32 @@ impl Stream {
                         }
                     },
                     framing::FrameType::WindowUpdate => {
-                        let window_update_frame = framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter());
+                        let window_update_frame = frame_checking::window_update::check_stream_window_update(
+                            framing::window_update::WindowUpdateFrame::new_stream(&frame.header, &mut frame.payload.into_iter()),
+                            self.send_window
+                        );
 
-                        self.send_window += window_update_frame.get_window_size_increment();
+                        match window_update_frame {
+                            Ok(frame) => {
+                                self.send_window += frame.get_window_size_increment();
 
-                        // TODO there is an error to be handled here if the frame decode fails.
-                        (None, None)
+                                (None, None)
+                            },
+                            Err(e) => {
+                                (
+                                    Some(state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    Some(e)
+                                )
+                            }
+                        }
                     },
                     framing::FrameType::ResetStream => {
                         match framing::reset_stream::ResetStreamFrame::new(&frame.header, &mut frame.payload.into_iter()) {
