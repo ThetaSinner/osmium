@@ -23,6 +23,7 @@ pub mod huffman;
 pub mod unpack;
 pub mod pack;
 pub mod flags;
+pub mod header_trait;
 
 use self::table::{Table, Field};
 use self::context::{SendContext, RecvContext, ContextTrait};
@@ -128,9 +129,47 @@ impl HPack {
 
 #[cfg(test)]
 mod tests {
-    use super::{HPack, pack, unpack, STATIC_TABLE_LENGTH};
+    use super::{HPack, pack, unpack, table, STATIC_TABLE_LENGTH};
+    use super::header_trait::HpackHeaderTrait;
     use http2::hpack::context::ContextTrait;
-    use http2::header;
+    
+    // don't want a dependency on http2, so create fake http2 header implementation here
+    #[derive(Debug)]
+    struct FakeHeader {
+        pub name: String,
+        pub value: String,
+        pub allow_compression: bool
+    }
+
+    impl HpackHeaderTrait for FakeHeader {
+        fn from_field_with_compression_flag(field: table::Field, allow_compression: bool) -> Self {
+            FakeHeader {
+                name: field.name,
+                value: field.value,
+                allow_compression: allow_compression
+            }
+        }
+
+        fn from_field(field: table::Field) -> Self {
+            FakeHeader {
+                name: field.name,
+                value: field.value,
+                allow_compression: true
+            }
+        }
+
+        fn get_name(&self) -> String {
+            self.name.clone()
+        }
+
+        fn get_value(&self) -> String {
+            self.value.clone()
+        }
+
+        fn is_allow_compression(&self) -> bool {
+            self.allow_compression
+        }
+    }
 
     fn to_hex_dump(data: &[u8]) -> String {
         println!("{:?}, {}", data, data.len());
@@ -160,7 +199,7 @@ mod tests {
         dump
     }
 
-    fn assert_headers(expected: &header::Headers, actual: &header::Headers) {
+    fn assert_headers(expected: &Vec<FakeHeader>, actual: &Vec<FakeHeader>) {
         assert_eq!(expected.len(), actual.len());
 
         let mut actual_iter = actual.iter();
@@ -207,14 +246,14 @@ mod tests {
         let hpack = HPack::new();
         let mut encoding_context = hpack.new_send_context();
 
-        let mut headers = header::Headers::new();
+        let mut headers = Vec::<FakeHeader>::new();
 
-        headers.push(
-            header::HeaderName::CustomHeader(String::from("custom-key")),
-            header::HeaderValue::Str(String::from("custom-header"))
-        );
+        headers.push(FakeHeader::from_field(table::Field {
+            name: "custom-key".to_owned(),
+            value: "custom-header".to_owned()
+        }));
 
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         assert_eq!("400a 6375 7374 6f6d 2d6b 6579 0d63 7573 746f 6d2d 6865 6164 6572", to_hex_dump(encoded.as_slice()));
     }
@@ -224,17 +263,19 @@ mod tests {
     pub fn decode_custom_header() {
         let hpack = HPack::new();
 
-        let mut headers = header::Headers::new();
-        headers.push(
-            header::HeaderName::CustomHeader(String::from("custom-key")),
-            header::HeaderValue::Str(String::from("custom-header"))
-        );
+        let mut headers = Vec::<FakeHeader>::new();
+
+        headers.push(FakeHeader::from_field(table::Field {
+            name: "custom-key".to_owned(),
+            value: "custom-header".to_owned()
+        }));
 
         let mut encoding_context = hpack.new_send_context();
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
-        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+        let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+        unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
         // assert the decoded headers.
         assert_headers(&headers, &decoded.headers);
@@ -252,14 +293,14 @@ mod tests {
         let hpack = HPack::new();
         let mut encoding_context = hpack.new_send_context();
 
-        let mut headers = header::Headers::new();
+        let mut headers = Vec::<FakeHeader>::new();
 
-        headers.push(
-            header::HeaderName::PseudoPath,
-            header::HeaderValue::Str(String::from("/sample/path"))
-        );
+        headers.push(FakeHeader::from_field(table::Field {
+            name: ":path".to_owned(),
+            value: "/sample/path".to_owned()
+        }));
 
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         assert_eq!("040c 2f73 616d 706c 652f 7061 7468", to_hex_dump(encoded.as_slice()));
     }
@@ -269,17 +310,18 @@ mod tests {
     pub fn decode_literal_field_without_indexing() {
         let hpack = HPack::new();
 
-        let mut headers = header::Headers::new();
-        headers.push(
-            header::HeaderName::PseudoPath,
-            header::HeaderValue::Str(String::from("/sample/path"))
-        );
+        let mut headers = Vec::<FakeHeader>::new();
+        headers.push(FakeHeader::from_field(table::Field {
+            name: ":path".to_owned(),
+            value: "/sample/path".to_owned()
+        }));
 
         let mut encoding_context = hpack.new_send_context();
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
-        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+        let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+        unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
         // assert the decoded headers.
         assert_headers(&headers, &decoded.headers);
@@ -299,17 +341,16 @@ mod tests {
         let hpack = HPack::new();
         let mut encoding_context = hpack.new_send_context();
 
-        let mut headers = header::Headers::new();
+        let mut headers = Vec::<FakeHeader>::new();
+        headers.push(FakeHeader::from_field_with_compression_flag(
+            table::Field {
+                name: "password".to_owned(),
+                value: "secret".to_owned()
+            }, 
+            false
+        ));
 
-        let mut secret_password_header = header::Header::new(
-            header::HeaderName::CustomHeader(String::from("password")),
-            header::HeaderValue::Str(String::from("secret"))
-        );
-        secret_password_header.set_allow_compression(false);
-
-        headers.push_header(secret_password_header);
-
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         assert_eq!("1008 7061 7373 776f 7264 0673 6563 7265 74", to_hex_dump(encoded.as_slice()));
     }
@@ -319,20 +360,21 @@ mod tests {
     pub fn decode_literal_field_never_indexed() {
         let hpack = HPack::new();
 
-        let mut headers = header::Headers::new();
-
-        let mut secret_password_header = header::Header::new(
-            header::HeaderName::CustomHeader(String::from("password")),
-            header::HeaderValue::Str(String::from("secret"))
-        );
-        secret_password_header.set_allow_compression(false);
-        headers.push_header(secret_password_header);
+        let mut headers = Vec::<FakeHeader>::new();
+        headers.push(FakeHeader::from_field_with_compression_flag(
+            table::Field {
+                name: "password".to_owned(),
+                value: "secret".to_owned()
+            }, 
+            false
+        ));
 
         let mut encoding_context = hpack.new_send_context();
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
-        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+        let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+        unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
         // assert the decoded headers.
         assert_headers(&headers, &decoded.headers);
@@ -349,16 +391,13 @@ mod tests {
         let hpack = HPack::new();
         let mut encoding_context = hpack.new_send_context();
 
-        let mut headers = header::Headers::new();
+        let mut headers = Vec::<FakeHeader>::new();
+        headers.push(FakeHeader::from_field(table::Field {
+            name: ":method".to_owned(),
+            value: "GET".to_owned()
+        }));
 
-        let method_get_header = header::Header::new(
-            header::HeaderName::PseudoMethod,
-            header::HeaderValue::Str(String::from("GET"))
-        );
-
-        headers.push_header(method_get_header);
-
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         assert_eq!("82", to_hex_dump(encoded.as_slice()));
     }
@@ -368,19 +407,18 @@ mod tests {
     pub fn decode_indexed() {
         let hpack = HPack::new();
 
-        let mut headers = header::Headers::new();
-
-        let method_get_header = header::Header::new(
-            header::HeaderName::PseudoMethod,
-            header::HeaderValue::Str(String::from("GET"))
-        );
-        headers.push_header(method_get_header);
+        let mut headers = Vec::<FakeHeader>::new();
+        headers.push(FakeHeader::from_field(table::Field {
+            name: ":method".to_owned(),
+            value: "GET".to_owned()
+        }));
 
         let mut encoding_context = hpack.new_send_context();
-        let encoded = pack::pack(&headers, &mut encoding_context, false);
+        let encoded = pack::pack(headers.iter(), &mut encoding_context, false);
 
         let mut decoding_context = hpack.new_recv_context();
-        let decoded = unpack::unpack(&encoded, &mut decoding_context);
+        let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+        unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
         // assert the decoded headers.
         assert_headers(&headers, &decoded.headers);
@@ -405,28 +443,29 @@ mod tests {
 
         // Request 1
         {
-            let mut headers = header::Headers::new();
-            headers.push(
-                header::HeaderName::PseudoMethod,
-                header::HeaderValue::Str(String::from("GET"))
-            );
-            headers.push(
-                header::HeaderName::PseudoScheme,
-                header::HeaderValue::Str(String::from("http"))
-            );
-            headers.push(
-                header::HeaderName::PseudoPath,
-                header::HeaderValue::Str(String::from("/"))
-            );
-            headers.push(
-                header::HeaderName::PseudoAuthority,
-                header::HeaderValue::Str(String::from("www.example.com"))
-            );
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":method".to_owned(),
+                value: "GET".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":scheme".to_owned(),
+                value: "http".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":path".to_owned(),
+                value: "/".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":authority".to_owned(),
+                value: "www.example.com".to_owned()
+            }));
 
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
             assert_eq!(request_one_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);
@@ -440,32 +479,33 @@ mod tests {
 
         // Request 2
         {
-            let mut headers = header::Headers::new();
-            headers.push(
-                header::HeaderName::PseudoMethod,
-                header::HeaderValue::Str(String::from("GET"))
-            );
-            headers.push(
-                header::HeaderName::PseudoScheme,
-                header::HeaderValue::Str(String::from("http"))
-            );
-            headers.push(
-                header::HeaderName::PseudoPath,
-                header::HeaderValue::Str(String::from("/"))
-            );
-            headers.push(
-                header::HeaderName::PseudoAuthority,
-                header::HeaderValue::Str(String::from("www.example.com"))
-            );
-            headers.push(
-                header::HeaderName::CacheControl,
-                header::HeaderValue::Str(String::from("no-cache"))
-            );
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":method".to_owned(),
+                value: "GET".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":scheme".to_owned(),
+                value: "http".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":path".to_owned(),
+                value: "/".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":authority".to_owned(),
+                value: "www.example.com".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "cache-control".to_owned(),
+                value: "no-cache".to_owned()
+            }));
 
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
             assert_eq!(request_two_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);
@@ -480,32 +520,33 @@ mod tests {
 
         // Third request
         {
-            let mut headers = header::Headers::new();
-            headers.push(
-                header::HeaderName::PseudoMethod,
-                header::HeaderValue::Str(String::from("GET"))
-            );
-            headers.push(
-                header::HeaderName::PseudoScheme,
-                header::HeaderValue::Str(String::from("https"))
-            );
-            headers.push(
-                header::HeaderName::PseudoPath,
-                header::HeaderValue::Str(String::from("/index.html"))
-            );
-            headers.push(
-                header::HeaderName::PseudoAuthority,
-                header::HeaderValue::Str(String::from("www.example.com"))
-            );
-            headers.push(
-                header::HeaderName::CustomHeader(String::from("custom-key")),
-                header::HeaderValue::Str(String::from("custom-value"))
-            );
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":method".to_owned(),
+                value: "GET".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":scheme".to_owned(),
+                value: "https".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":path".to_owned(),
+                value: "/index.html".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":authority".to_owned(),
+                value: "www.example.com".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "custom-key".to_owned(),
+                value: "custom-value".to_owned()
+            }));
 
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
             assert_eq!(request_three_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(&encoded, &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(&encoded, &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);
@@ -558,30 +599,30 @@ mod tests {
 
         // Response 1
         {
-            let mut headers = header::Headers::new();
-
-            headers.push(
-                header::HeaderName::PseudoStatus,
-                header::HeaderValue::Num(302)
-            );
-            headers.push(
-                header::HeaderName::CacheControl,
-                header::HeaderValue::Str(String::from("private"))
-            );
-            headers.push(
-                header::HeaderName::Date,
-                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:21 GMT"))
-            );
-            headers.push(
-                header::HeaderName::Location,
-                header::HeaderValue::Str(String::from("https://www.example.com"))
-            );
-
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":status".to_owned(),
+                value: "302".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "cache-control".to_owned(),
+                value: "private".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "date".to_owned(),
+                value: "Mon, 21 Oct 2013 20:13:21 GMT".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "location".to_owned(),
+                value: "https://www.example.com".to_owned()
+            }));
+            
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
 
             assert_eq!(response_one_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(encoded.as_slice(), &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);
@@ -598,30 +639,30 @@ mod tests {
 
         // Response 2
         {
-            let mut headers = header::Headers::new();
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":status".to_owned(),
+                value: "307".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "cache-control".to_owned(),
+                value: "private".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "date".to_owned(),
+                value: "Mon, 21 Oct 2013 20:13:21 GMT".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "location".to_owned(),
+                value: "https://www.example.com".to_owned()
+            }));
 
-            headers.push(
-                header::HeaderName::PseudoStatus,
-                header::HeaderValue::Num(307)
-            );
-            headers.push(
-                header::HeaderName::CacheControl,
-                header::HeaderValue::Str(String::from("private"))
-            );
-            headers.push(
-                header::HeaderName::Date,
-                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:21 GMT"))
-            );
-            headers.push(
-                header::HeaderName::Location,
-                header::HeaderValue::Str(String::from("https://www.example.com"))
-            );
-
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
 
             assert_eq!(response_two_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(encoded.as_slice(), &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);
@@ -638,38 +679,38 @@ mod tests {
 
         // Response 3
         {
-            let mut headers = header::Headers::new();
+            let mut headers = Vec::<FakeHeader>::new();
+            headers.push(FakeHeader::from_field(table::Field {
+                name: ":status".to_owned(),
+                value: "200".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "cache-control".to_owned(),
+                value: "private".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "date".to_owned(),
+                value: "Mon, 21 Oct 2013 20:13:22 GMT".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "location".to_owned(),
+                value: "https://www.example.com".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "content-encoding".to_owned(),
+                value: "gzip".to_owned()
+            }));
+            headers.push(FakeHeader::from_field(table::Field {
+                name: "set-cookie".to_owned(),
+                value: "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1".to_owned()
+            }));
 
-            headers.push(
-                header::HeaderName::PseudoStatus,
-                header::HeaderValue::Num(200)
-            );
-            headers.push(
-                header::HeaderName::CacheControl,
-                header::HeaderValue::Str(String::from("private"))
-            );
-            headers.push(
-                header::HeaderName::Date,
-                header::HeaderValue::Str(String::from("Mon, 21 Oct 2013 20:13:22 GMT"))
-            );
-            headers.push(
-                header::HeaderName::Location,
-                header::HeaderValue::Str(String::from("https://www.example.com"))
-            );
-            headers.push(
-                header::HeaderName::ContentEncoding,
-                header::HeaderValue::Str(String::from("gzip"))
-            );
-            headers.push(
-                header::HeaderName::SetCookie,
-                header::HeaderValue::Str(String::from("foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1"))
-            );
-
-            let encoded = pack::pack(&headers, &mut encoding_context, use_huffman_coding);
+            let encoded = pack::pack(headers.iter(), &mut encoding_context, use_huffman_coding);
 
             assert_eq!(response_three_hex_dump, to_hex_dump(encoded.as_slice()));
 
-            let decoded = unpack::unpack(encoded.as_slice(), &mut decoding_context);
+            let mut decoded = unpack::UnpackedHeaders::<FakeHeader>::new();
+            unpack::unpack(encoded.as_slice(), &mut decoding_context, &mut decoded);
 
             // assert the decoded headers.
             assert_headers(&headers, &decoded.headers);

@@ -15,23 +15,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
+// std
+use std::slice;
+
 // osmium
-use http2::header;
 use http2::hpack::context::{self, ContextTrait};
 use http2::hpack::flags;
 use http2::hpack::number;
 use http2::hpack::string;
 use http2::hpack::table;
+use http2::hpack::header_trait;
 
-const NEVER_INDEXED: [header::HeaderName; 0] = [
+const NEVER_INDEXED: [String; 0] = [
     // Date is a temporary example of a never indexed header
     //header::HeaderName::Date
 ];
 
-const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [
+const LITERAL_WITHOUT_INDEXING: [&str; 1] = [
     // Path is an example of a header which has common values which should be indexed i.e. '/' and '/index.html'
     // but which will have many values which should not be fully indexed, just header name indexed
-    header::HeaderName::PseudoPath
+    ":path"
 ];
 
 // TODO the table size update needs to come through here I think?
@@ -41,7 +44,9 @@ const LITERAL_WITHOUT_INDEXING: [header::HeaderName; 1] = [
 
 // TODO comments need updating, they're still the ones I wrote while puzzling out the encoder.
 
-pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_huffman_coding: bool) -> Vec<u8> {
+pub fn pack<T>(headers: slice::Iter<T>, context: &mut context::SendContext, use_huffman_coding: bool) -> Vec<u8>
+    where T: header_trait::HpackHeaderTrait
+{
     let mut target = Vec::new();
 
     // Check whether a decision has been made to change the dynamic table size.
@@ -59,22 +64,22 @@ pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_h
         pack_dynamic_table_size_update(size_update, &mut target);
     }
 
-    for header in headers.iter() {
+    for header in headers {
         let field = table::Field {
-            name: String::from(header.name.clone()),
-            value: String::from(header.value.clone())
+            name: String::from(header.get_name()),
+            value: String::from(header.get_value())
         };
 
         trace!("{:?}", field);
 
-        if !header.is_allow_compression() || is_never_index_header(&header.name) {
+        if !header.is_allow_compression() || is_never_index_header(&field.name) {
             // TODO it's really not clever to have to clone the value here to build a field for search.
             // especially as find_field is never used without a Header available.
             if let Some((index, _)) = context.find_field(&field) {
-                pack_literal_never_indexed_with_indexed_name(index, &header.value, &mut target);
+                pack_literal_never_indexed_with_indexed_name(index, &field.value, &mut target);
             }
             else {
-                pack_literal_never_indexed(&header, use_huffman_coding, &mut target);
+                pack_literal_never_indexed(&field, use_huffman_coding, &mut target);
             }
         }
         else {
@@ -90,12 +95,12 @@ pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_h
                     trace!("is indexed, but not with value");
                     // the value is not currently indexed, we could index and allow the value to be added to the 
                     // dynamic table in the decoder, or we could not index and just refer to this header name.
-                    if is_literal_without_indexing_header(&header.name) {
+                    if is_literal_without_indexing_header(&field.name) {
                         trace!("pack without indexing");
-                        pack_literal_without_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
+                        pack_literal_without_indexing_with_indexed_name(index, &field.value, use_huffman_coding, &mut target);
                     }
                     else {
-                        pack_literal_with_indexing_with_indexed_name(index, &header.value, use_huffman_coding, &mut target);
+                        pack_literal_with_indexing_with_indexed_name(index, &field.value, use_huffman_coding, &mut target);
                         context.insert(field);
                     }
                 }
@@ -104,11 +109,11 @@ pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_h
                 trace!("not found, start from scratch");
 
                 // header name is not currently indexed, we can index it now, or send a literal representation.
-                if is_literal_without_indexing_header(&header.name) {
-                    pack_literal_without_indexing(&header, use_huffman_coding, &mut target);
+                if is_literal_without_indexing_header(&field.name) {
+                    pack_literal_without_indexing(&field, use_huffman_coding, &mut target);
                 }
                 else {
-                    pack_literal_with_indexing(&header, use_huffman_coding, &mut target);
+                    pack_literal_with_indexing(&field, use_huffman_coding, &mut target);
                     context.insert(field);
                 }
             }
@@ -118,7 +123,7 @@ pub fn pack(headers: &header::Headers, context: &mut context::SendContext, use_h
     target
 }
 
-fn is_never_index_header(header_name: &header::HeaderName) -> bool {
+fn is_never_index_header(header_name: &str) -> bool {
     for never_index_header_name in NEVER_INDEXED.into_iter() {
         if header_name == never_index_header_name {
             return true;
@@ -128,7 +133,7 @@ fn is_never_index_header(header_name: &header::HeaderName) -> bool {
     false
 }
 
-fn is_literal_without_indexing_header(header_name: &header::HeaderName) -> bool {
+fn is_literal_without_indexing_header(header_name: &String) -> bool {
     for literal_without_indexing_header_name in LITERAL_WITHOUT_INDEXING.into_iter() {
         if header_name == literal_without_indexing_header_name {
             return true;
@@ -149,7 +154,7 @@ fn pack_indexed_header(index: usize, target: &mut Vec<u8>) {
     trace!("packed indexed header with index {}, {:?}", index, target);
 }
 
-fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {
+fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &str, use_huffman_coding: bool, target: &mut Vec<u8>) {
     let encoded_name_index = number::encode(index as u32, 6);
 
     target.push(flags::LITERAL_WITH_INDEXING_FLAG | encoded_name_index.prefix);
@@ -157,19 +162,19 @@ fn pack_literal_with_indexing_with_indexed_name(index: usize, header_value: &hea
         target.extend(rest);
     }
 
-    trace!("{:?}", string::encode(String::from(header_value.clone()), use_huffman_coding));
+    trace!("{:?}", string::encode(String::from(header_value), use_huffman_coding));
 
-    target.extend(string::encode(String::from(header_value.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(header_value), use_huffman_coding));
 }
 
-fn pack_literal_with_indexing(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
+fn pack_literal_with_indexing(field: &table::Field, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(flags::LITERAL_WITH_INDEXING_FLAG);
 
-    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
-    target.extend(string::encode(String::from(header.value.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(field.name.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(field.value.clone()), use_huffman_coding));
 }
 
-fn pack_literal_without_indexing_with_indexed_name(index: usize, header_value: &header::HeaderValue, use_huffman_coding: bool, target: &mut Vec<u8>) {
+fn pack_literal_without_indexing_with_indexed_name(index: usize, header_value: &str, use_huffman_coding: bool, target: &mut Vec<u8>) {
     trace!("index to use {}", index);
     let encoded_name_index = number::encode(index as u32, 4);
 
@@ -183,14 +188,14 @@ fn pack_literal_without_indexing_with_indexed_name(index: usize, header_value: &
     target.extend(string::encode(String::from(header_value.clone()), use_huffman_coding));
 }
 
-fn pack_literal_without_indexing(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
+fn pack_literal_without_indexing(field: &table::Field, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(0u8);
 
-    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
-    target.extend(string::encode(String::from(header.value.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(field.name.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(field.value.clone()), use_huffman_coding));
 }
 
-fn pack_literal_never_indexed_with_indexed_name(index: usize, header_value: &header::HeaderValue, target: &mut Vec<u8>) {
+fn pack_literal_never_indexed_with_indexed_name(index: usize, header_value: &str, target: &mut Vec<u8>) {
     let encoded_name_index = number::encode(index as u32, 4);
 
     target.push(flags::LITERAL_NEVER_INDEX_FLAG | encoded_name_index.prefix);
@@ -204,12 +209,12 @@ fn pack_literal_never_indexed_with_indexed_name(index: usize, header_value: &hea
     target.extend(string::encode(String::from(header_value.clone()), false));
 }
 
-fn pack_literal_never_indexed(header: &header::Header, use_huffman_coding: bool, target: &mut Vec<u8>) {
+fn pack_literal_never_indexed(field: &table::Field, use_huffman_coding: bool, target: &mut Vec<u8>) {
     target.push(flags::LITERAL_NEVER_INDEX_FLAG);
 
-    target.extend(string::encode(String::from(header.name.clone()), use_huffman_coding));
+    target.extend(string::encode(String::from(field.name.clone()), use_huffman_coding));
     // deliberately do not allow override of huffman coding for the value
-    target.extend(string::encode(String::from(header.value.clone()), false));
+    target.extend(string::encode(String::from(field.value.clone()), false));
 }
 
 fn pack_dynamic_table_size_update(size_update: u32, target: &mut Vec<u8>) {

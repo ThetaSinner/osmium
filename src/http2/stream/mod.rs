@@ -952,7 +952,7 @@ impl Stream {
                         promised_stream_identifier
                     );
                     push_promise_frame.set_header_block_fragment(
-                        hpack_pack::pack(&request.headers, hpack_send_context, true)
+                        hpack_pack::pack(request.headers.iter(), hpack_send_context, true)
                     );
 
                     self.push_promise_publish_queue.push_front((promised_stream_identifier, request));

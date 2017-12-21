@@ -66,7 +66,7 @@ impl StreamResponse {
 
     fn headers_to_frames(headers: &header::Headers, hpack_send_context: &mut hpack_context::SendContext, end_stream: bool) -> Box<framing::CompressibleHttpFrame>
     {
-        let packed = hpack_pack::pack(&headers, hpack_send_context, true);
+        let packed = hpack_pack::pack(headers.iter(), hpack_send_context, true);
         let num_chunks = ((packed.len() as f32) / 150f32).ceil() as i32;
         let mut chunk_count = 1;
         let mut chunks = packed.chunks(150);

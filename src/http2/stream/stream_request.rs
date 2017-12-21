@@ -38,17 +38,18 @@ impl StreamRequest {
 
     // TODO will return an error.
     pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_recv_context: &mut hpack_context::RecvContext) {
-        let decoded = hpack_unpack::unpack(temp_header_block, hpack_recv_context);
+        let mut decoded = hpack_unpack::UnpackedHeaders::<header::Header>::new();
+        hpack_unpack::unpack(temp_header_block, hpack_recv_context, &mut decoded);
 
         // TODO can the header block be empty? because that will break the logic below.
 
         if self.headers.is_empty() {
             // If no request headers have been received then these are the request headers.
-            self.headers = decoded.headers;
+            self.headers = hpack_to_http2_headers(decoded.headers);
         }
         else if self.trailer_headers.is_none() {
             // If no trailer headers have been received then these are the tailer headers.
-            self.trailer_headers = Some(decoded.headers);
+            self.trailer_headers = Some(hpack_to_http2_headers(decoded.headers));
         }
         else {
             // TODO handle error. We have received all the header blocks we were expecting, but received
@@ -56,4 +57,14 @@ impl StreamRequest {
             panic!("unexpected header block");
         }
     }
+}
+
+fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> header::Headers {
+    let mut headers = header::Headers::new();
+
+    for header in hpack_headers.into_iter() {
+        headers.push_header(header);
+    }
+
+    headers
 }

@@ -18,6 +18,8 @@
 // std
 use std::fmt;
 use std::slice;
+use http2::hpack::header_trait;
+use http2::hpack::table;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum HeaderName {
@@ -172,5 +174,37 @@ impl fmt::Display for HeaderValue {
             HeaderValue::Str(ref s) => write!(f, "{}", s),
             HeaderValue::Num(ref n) => write!(f, "{}", n)
         }
+    }
+}
+
+impl header_trait::HpackHeaderTrait for Header {
+    fn from_field_with_compression_flag(field: table::Field, allow_compression: bool) -> Self {
+        let mut header = Header::new(field.name.as_str().into(), HeaderValue::Str(field.value));
+        header.set_allow_compression(allow_compression);
+
+        header
+    }
+
+    fn from_field(field: table::Field) -> Self {
+        Header::new(field.name.as_str().into(), HeaderValue::Str(field.value))
+    }
+
+    fn get_name(&self) -> String {
+        self.name.clone().into()
+    }
+
+    fn get_value(&self) -> String {
+        match self.value {
+            HeaderValue::Str(ref s) => {
+                s.clone()
+            },
+            _ => {
+                unimplemented!();
+            }
+        }
+    }
+
+    fn is_allow_compression(&self) -> bool {
+        self.is_allow_compression()
     }
 }

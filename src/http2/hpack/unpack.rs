@@ -16,25 +16,34 @@
 // along with Osmium.  If not, see <http://www.gnu.org/licenses/>.
 
 // osmium
-use http2::header;
 use http2::hpack::number;
 use http2::hpack::string;
 use http2::hpack::context::{self, ContextTrait};
 use http2::hpack::table;
 use http2::hpack::flags;
+use http2::hpack::header_trait;
 
 #[derive(Debug)]
-pub struct UnpackedHeaders {
-    pub headers: header::Headers,
-    pub octets_read: usize
+pub struct UnpackedHeaders<T: header_trait::HpackHeaderTrait>
+{
+    pub headers: Vec<T>,
+    pub octets_read: usize // TODO don't use usize.
 }
 
-pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> UnpackedHeaders {
-    let mut unpacked_headers = UnpackedHeaders {
-        headers: header::Headers::new(),
-        octets_read: 0
-    };
+impl<T> UnpackedHeaders<T>
+    where T: header_trait::HpackHeaderTrait
+{
+    pub fn new() -> Self {
+        UnpackedHeaders {
+            headers: Vec::new(),
+            octets_read: 0
+        }
+    }
+}
 
+pub fn unpack<'a, T>(data: &[u8], context: &'a mut context::RecvContext, unpacked_headers: &mut UnpackedHeaders<T>) 
+    where T: header_trait::HpackHeaderTrait
+{
     let mut data_iter = data.iter().peekable();
 
     // TODO termination condition? just the flags failing to match isn't enough to end the loop correctly surely.
@@ -48,7 +57,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
 
             let field = context.get(decoded_number.num as usize).unwrap().clone();
 
-            unpacked_headers.headers.push_header(header::Header::from(field));
+            unpacked_headers.headers.push(T::from_field(field));
         }
         else if peek_front & flags::LITERAL_WITH_INDEXING_FLAG == flags::LITERAL_WITH_INDEXING_FLAG {
             let decoded_number = number::decode(&mut data_iter, 6);
@@ -66,7 +75,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                 // this representation causes the field to be added to the dynamic table.
                 context.insert(field.clone());
 
-                unpacked_headers.headers.push_header(header::Header::from(field));
+                unpacked_headers.headers.push(T::from_field(field));
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -83,7 +92,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                 // this representation causes the field to be added to the dynamic table.
                 context.insert(field.clone());
 
-                unpacked_headers.headers.push_header(header::Header::from(field));
+                unpacked_headers.headers.push(T::from_field(field));
             }
         }
         else if peek_front & flags::SIZE_UPDATE_FLAG == flags::SIZE_UPDATE_FLAG {
@@ -108,7 +117,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                 // the header is indexed but we want to use the value from the packed header.
                 field.value = decoded_string.string;
 
-                unpacked_headers.headers.push_header(header::Header::from(field));
+                unpacked_headers.headers.push(T::from_field(field));
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -122,7 +131,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                     value: decoded_value.string
                 };
 
-                unpacked_headers.headers.push_header(header::Header::from(field));
+                unpacked_headers.headers.push(T::from_field(field));
             }
         }
         else if peek_front & flags::LITERAL_NEVER_INDEX_FLAG == flags::LITERAL_NEVER_INDEX_FLAG {
@@ -132,7 +141,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
             unpacked_headers.octets_read += 2 + decoded_number.octets_read;
 
             // Note that headers are indexed from 1, so a zero value here means the name is not indexed.
-            let mut header = if decoded_number.num != 0 {
+            let field = if decoded_number.num != 0 {
                 let mut field = context.get(decoded_number.num as usize).unwrap().clone();
 
                 let decoded_string = string::decode(&mut data_iter);
@@ -140,7 +149,7 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                 // the header is indexed but we want to use the value from the packed header.
                 field.value = decoded_string.string;
 
-                header::Header::from(field)
+                field
             }
             else {
                 let decoded_name = string::decode(&mut data_iter);
@@ -154,34 +163,16 @@ pub fn unpack<'a>(data: &[u8], context: &'a mut context::RecvContext) -> Unpacke
                     value: decoded_value.string
                 };
 
-                header::Header::from(field)
+                field
             };
 
             // the header field should never be indexed, primarily to intended to protect values which are not to
             // be put at risk by compressing them. Therefore, set allow compression flag to false.
-            header.set_allow_compression(false);
-            unpacked_headers.headers.push_header(header);
+            unpacked_headers.headers.push(T::from_field_with_compression_flag(field, false));
         }
         else {
             // TODO that doesn't look right
             break;
         }
-    }
-
-    unpacked_headers
-}
-
-impl From<table::Field> for header::Header {
-    fn from(field: table::Field) -> Self {
-        let header_name = header::HeaderName::from(field.name.as_ref());
-
-        header::Header::new(
-            header_name.clone(), 
-            match header_name {
-                // TODO map types which should be numbers etc.
-                header::HeaderName::PseudoStatus => header::HeaderValue::Num(field.value.parse::<i32>().unwrap()),
-                _ => header::HeaderValue::Str(field.value)
-            }
-        )
     }
 }
