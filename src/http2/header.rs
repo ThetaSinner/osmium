@@ -198,8 +198,8 @@ impl header_trait::HpackHeaderTrait for Header {
             HeaderValue::Str(ref s) => {
                 s.clone()
             },
-            _ => {
-                unimplemented!();
+            HeaderValue::Num(ref n) => {
+                n.to_string()
             }
         }
     }
