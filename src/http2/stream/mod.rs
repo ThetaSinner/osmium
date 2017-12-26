@@ -159,27 +159,52 @@ impl Stream {
                         let headers_frame = framing::headers::HeaderFrame::new(&frame.header, &mut frame.payload.into_iter());
                         self.temp_header_block.extend(headers_frame.get_header_block_fragment());
 
+                        let mut process_error = None;
+
                         // If the headers block is complete then unpack it immediately.
                         if headers_frame.is_end_headers() {
-                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
+                            process_error = self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
 
                             // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                             self.temp_header_block.clear();
                         }
 
-                        if headers_frame.is_end_stream() {
+                        if process_error.is_some() {
+                            if let state::StreamStateName::Open(ref state) = new_state {
+                                (
+                                    Some(
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    process_error
+                                )
+                            }
+                            else {
+                                unreachable!("enum decomposition failed. How?");
+                            }
+                        }
+                        else if headers_frame.is_end_stream() {
                             // This is an interesting consequence of using enums for wrapping states.
                             // This can never fail, because we have explicitly changed state to open above.
                             // But we still have to destructure.
                             new_state = if let state::StreamStateName::Open(ref state) = new_state {
-                                 state::StreamStateName::HalfClosedRemote(state.into())
+                                state::StreamStateName::HalfClosedRemote(state.into())
                             }
                             else {
                                 unreachable!("enum decomposition failed. How?");
                             };
-                        }
 
-                        (Some(new_state), None)
+                            (Some(new_state), None)
+                        }
+                        else {
+                            (Some(new_state), None)
+                        }
                     },
                     framing::FrameType::PushPromise => {
                         // (8.2) A client cannot push. Thus, servers MUST treat the receipt of a 
@@ -240,17 +265,35 @@ impl Stream {
                         // it is this header frame which needs to be checked for end stream rather than the next one.
                         let should_end_stream = self.should_headers_frame_end_stream();
 
+                        let mut process_error = None;
+
                         if headers_frame.is_end_headers() {
-                            self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
+                            process_error = self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
 
                             // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                             self.temp_header_block.clear();
                         }
 
-                        // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
-                        // flag set after receiving a final (non-informational) status code MUST 
-                        // treat the corresponding request or response as malformed (Section 8.1.2.6).
-                        if should_end_stream {
+                        if process_error.is_some() {
+                            (
+                                Some(
+                                    state::StreamStateName::Closed(
+                                        (
+                                            state,
+                                            state::StreamClosedInfo {
+                                                reason: state::StreamClosedReason::ResetLocal
+                                            }
+                                        ).into()
+                                    )
+                                ),
+                                process_error
+                            )
+                        }
+                        else if should_end_stream {
+                            // (8.1) An endpoint that receives a HEADERS frame without the END_STREAM 
+                            // flag set after receiving a final (non-informational) status code MUST 
+                            // treat the corresponding request or response as malformed (Section 8.1.2.6).
+
                             if headers_frame.is_end_stream() {
                                 (
                                     Some(
@@ -386,16 +429,34 @@ impl Stream {
                         else {
                             let continuation_frame = framing::continuation::ContinuationFrame::new(&frame.header, &mut frame.payload.into_iter());
                             self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
-
+                            
+                            let mut process_error = None;
                             if continuation_frame.is_end_headers() {
-                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
+                                process_error = self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
                                 
                                 // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                                 self.temp_header_block.clear();
                             }
 
                             // TODO handle continuation frame decode error.
-                            (None, None)
+                            if process_error.is_some() {
+                                (
+                                    Some(
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    process_error
+                                )
+                            }
+                            else {
+                                (None, None)
+                            }
                         }
                     },
                     _ => {
@@ -444,15 +505,33 @@ impl Stream {
                             let continuation_frame = framing::continuation::ContinuationFrame::new(&frame.header, &mut frame.payload.into_iter());
                             self.temp_header_block.extend(continuation_frame.get_header_block_fragment());
 
+                            let mut process_error = None;
                             if continuation_frame.is_end_headers() {
-                                self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
+                                process_error = self.request.process_temp_header_block(self.temp_header_block.as_slice(), hpack_recv_context);
                                 
                                 // TODO this only removes values from the vector, it doesn't change the allocated capacity.
                                 self.temp_header_block.clear();
                             }
 
                             // TODO handle continuation frame decode error.
-                            (None, None)
+                            if process_error.is_some() {
+                                (
+                                    Some(
+                                        state::StreamStateName::Closed(
+                                            (
+                                                state,
+                                                state::StreamClosedInfo {
+                                                    reason: state::StreamClosedReason::ResetLocal
+                                                }
+                                            ).into()
+                                        )
+                                    ),
+                                    process_error
+                                )
+                            }
+                            else {
+                                (None, None)
+                            }
                         }
                     },
                     framing::FrameType::WindowUpdate => {

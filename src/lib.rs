@@ -30,6 +30,8 @@ extern crate threadpool;
 extern crate openssl;
 extern crate tokio_openssl;
 
+extern crate regex;
+
 pub mod http_version;
 pub mod http;
 pub mod http2;

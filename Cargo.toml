@@ -19,6 +19,8 @@ threadpool = "1.6"
 openssl = { version = "^0.9.17", features = ["v110", "v102"] }
 tokio-openssl = { git = "https://github.com/ThetaSinner/tokio-openssl" }
 
+regex = "0.2"
+
 # http only
 httparse = "1.2.3"
 

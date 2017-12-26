@@ -121,7 +121,8 @@ pub enum ErrorName {
     EvenStreamIdentiferOnClientInitiatedStream,
     ResetStreamFrameWithInvalidSize,
     WindowUpdateWouldCauseSendWindowToExceedLimit,
-    InvalidFrameLengthForConnectionWindowUpdateFrame
+    InvalidFrameLengthForConnectionWindowUpdateFrame,
+    NonLowerCaseHeaderNameIsRejectedAsMalformed
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -198,6 +199,9 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::InvalidFrameLengthForConnectionWindowUpdateFrame => {
                 "Invalid frame length for connection window update frame"
+            },
+            ErrorName::NonLowerCaseHeaderNameIsRejectedAsMalformed => {
+                "Nonlower-case header name is rejected as malformed"
             }
         }.to_owned().as_bytes().to_vec()
     }

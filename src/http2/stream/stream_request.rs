@@ -15,10 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Osmium. If not, see <http://www.gnu.org/licenses/>.
 
+// regex
+use regex::Regex;
+
 // osmium
 use http2::header;
 use http2::hpack::context as hpack_context;
 use http2::hpack::unpack as hpack_unpack;
+use http2::error;
 
 #[derive(Debug)]
 pub struct StreamRequest {
@@ -36,8 +40,7 @@ impl StreamRequest {
         }
     }
 
-    // TODO will return an error.
-    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_recv_context: &mut hpack_context::RecvContext) {
+    pub fn process_temp_header_block(&mut self, temp_header_block: &[u8], hpack_recv_context: &mut hpack_context::RecvContext) -> Option<error::HttpError> {
         let mut decoded = hpack_unpack::UnpackedHeaders::<header::Header>::new();
         hpack_unpack::unpack(temp_header_block, hpack_recv_context, &mut decoded);
 
@@ -45,26 +48,61 @@ impl StreamRequest {
 
         if self.headers.is_empty() {
             // If no request headers have been received then these are the request headers.
-            self.headers = hpack_to_http2_headers(decoded.headers);
+            match hpack_to_http2_headers(decoded.headers) {
+                Ok(headers) => {
+                    self.headers = headers;
+                },
+                Err(e) => return Some(e)
+            }
         }
         else if self.trailer_headers.is_none() {
             // If no trailer headers have been received then these are the tailer headers.
-            self.trailer_headers = Some(hpack_to_http2_headers(decoded.headers));
+            match hpack_to_http2_headers(decoded.headers) {
+                Ok(headers) => {
+                    self.trailer_headers = Some(headers);
+                },
+                Err(e) => return Some(e)
+            }
         }
         else {
             // TODO handle error. We have received all the header blocks we were expecting, but received
             // a request to process another.
             panic!("unexpected header block");
         }
+
+        None
     }
 }
 
-fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> header::Headers {
+fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::Headers, error::HttpError> {
     let mut headers = header::Headers::new();
 
-    for header in hpack_headers.into_iter() {
+    // TODO move to setup
+    let header_name_regex = Regex::new(r"^:?[!#$%&'*+\-.^_`|~0-9a-z]+$").unwrap();
+
+    // TODO this should be a move and not need mut?
+    for mut header in hpack_headers.into_iter() {
+        let new_name = match header.name {
+            header::HeaderName::CustomHeader(name) => {
+                // TODO this could be better, seeing as is has to be done many times
+                if !header_name_regex.is_match(String::from(name.clone()).as_str()) {
+                    error!("Rejecting header because of bad name {:?}", name);
+                    return Err(error::HttpError::StreamError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::NonLowerCaseHeaderNameIsRejectedAsMalformed
+                    ));
+                }
+
+                name.as_str().into()
+            },
+            _ => {
+                panic!("incorrect use of hpack");
+            }
+        };
+
+        header.name = new_name;
         headers.push_header(header);
     }
 
-    headers
+    Ok(headers)
 }

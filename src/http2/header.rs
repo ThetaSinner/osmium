@@ -48,7 +48,7 @@ pub enum HeaderValue {
 
 #[derive(Debug)]
 pub struct Header {
-    pub name: HeaderName, 
+    pub name: HeaderName,
     pub value: HeaderValue,
     allow_compression: bool
 }
@@ -177,16 +177,18 @@ impl fmt::Display for HeaderValue {
     }
 }
 
+// Dear user, note that because http2 has stronger semantics for headers than hpack does. To allow for this
+// extra processing step we deserialise into custom headers only and will use enums later.
 impl header_trait::HpackHeaderTrait for Header {
     fn from_field_with_compression_flag(field: table::Field, allow_compression: bool) -> Self {
-        let mut header = Header::new(field.name.as_str().into(), HeaderValue::Str(field.value));
+        let mut header = Header::from_field(field);
         header.set_allow_compression(allow_compression);
 
         header
     }
 
     fn from_field(field: table::Field) -> Self {
-        Header::new(field.name.as_str().into(), HeaderValue::Str(field.value))
+        Header::new(HeaderName::CustomHeader(field.name), HeaderValue::Str(field.value))
     }
 
     fn get_name(&self) -> String {
