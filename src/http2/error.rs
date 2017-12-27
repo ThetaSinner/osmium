@@ -122,7 +122,11 @@ pub enum ErrorName {
     ResetStreamFrameWithInvalidSize,
     WindowUpdateWouldCauseSendWindowToExceedLimit,
     InvalidFrameLengthForConnectionWindowUpdateFrame,
-    NonLowerCaseHeaderNameIsRejectedAsMalformed
+    NonLowerCaseHeaderNameIsRejectedAsMalformed,
+    MalformedRequestHasDuplicatePseudoHeaderPath,
+    MalformedRequestHasDuplicatePseudoHeaderMethod,
+    MalformedRequestHasDuplicatePseudoHeaderScheme,
+    MalformedRequestHasMissingRequiredPseudoHeader
 }
 
 impl From<ErrorName> for Vec<u8> {
@@ -202,6 +206,18 @@ impl From<ErrorName> for Vec<u8> {
             },
             ErrorName::NonLowerCaseHeaderNameIsRejectedAsMalformed => {
                 "Nonlower-case header name is rejected as malformed"
+            },
+            ErrorName::MalformedRequestHasDuplicatePseudoHeaderPath => {
+                "Malformed request has duplicate pseudo header :path"
+            },
+            ErrorName::MalformedRequestHasDuplicatePseudoHeaderMethod => {
+                "Malformed request has duplicate pdeudo header :method"
+            },
+            ErrorName::MalformedRequestHasDuplicatePseudoHeaderScheme => {
+                "Malformed request has duplicate pseudo header :scheme"
+            }
+            ErrorName::MalformedRequestHasMissingRequiredPseudoHeader => {
+                "Malformed request has missing required pseudo header"
             }
         }.to_owned().as_bytes().to_vec()
     }

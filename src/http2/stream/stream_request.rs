@@ -80,6 +80,10 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::
     // TODO move to setup
     let header_name_regex = Regex::new(r"^:?[!#$%&'*+\-.^_`|~0-9a-z]+$").unwrap();
 
+    let mut has_method = false;
+    let mut has_scheme = false;
+    let mut has_path = false;
+
     // TODO this should be a move and not need mut?
     for mut header in hpack_headers.into_iter() {
         let new_name = match header.name {
@@ -100,8 +104,51 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::
             }
         };
 
+        match new_name {
+            header::HeaderName::PseudoMethod => {
+                if has_method {
+                    return Err(error::HttpError::StreamError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderMethod
+                    ));
+                }
+
+                has_method = true;
+            },
+            header::HeaderName::PseudoScheme => {
+                if has_scheme {
+                    return Err(error::HttpError::StreamError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderScheme
+                    ));
+                }
+
+                has_scheme = true;
+            },
+            header::HeaderName::PseudoPath => {
+                if has_path {
+                    return Err(error::HttpError::StreamError(
+                        error::ErrorCode::ProtocolError,
+                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderPath
+                    ));
+                }
+
+                has_path = true;
+            },
+            _ => {
+                // ignore
+            }
+        }
+
         header.name = new_name;
         headers.push_header(header);
+    }
+
+    if !has_method || !has_scheme || !has_path {
+        return Err(error::HttpError::StreamError(
+            error::ErrorCode::ProtocolError,
+            error::ErrorName::MalformedRequestHasMissingRequiredPseudoHeader
+        ));
     }
 
     Ok(headers)
