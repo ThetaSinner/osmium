@@ -48,20 +48,26 @@ impl StreamRequest {
 
         if self.headers.is_empty() {
             // If no request headers have been received then these are the request headers.
-            match hpack_to_http2_headers(decoded.headers) {
+            match hpack_to_http2_headers(decoded.headers, true) {
                 Ok(headers) => {
                     self.headers = headers;
                 },
-                Err(e) => return Some(e)
+                Err(e) => {
+                    error!("Error converting hpack headers to http2 {:?}", e);
+                    return Some(e)
+                }
             }
         }
         else if self.trailer_headers.is_none() {
             // If no trailer headers have been received then these are the tailer headers.
-            match hpack_to_http2_headers(decoded.headers) {
+            match hpack_to_http2_headers(decoded.headers, false) {
                 Ok(headers) => {
                     self.trailer_headers = Some(headers);
                 },
-                Err(e) => return Some(e)
+                Err(e) => {
+                    error!("Error converting hpack headers to http2 {:?}", e);
+                    return Some(e)
+                }
             }
         }
         else {
@@ -74,7 +80,7 @@ impl StreamRequest {
     }
 }
 
-fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::Headers, error::HttpError> {
+fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>, assert_request: bool) -> Result<header::Headers, error::HttpError> {
     let mut headers = header::Headers::new();
 
     // TODO move to setup
@@ -104,39 +110,43 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::
             }
         };
 
-        match new_name {
-            header::HeaderName::PseudoMethod => {
-                if has_method {
-                    return Err(error::HttpError::StreamError(
-                        error::ErrorCode::ProtocolError,
-                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderMethod
-                    ));
-                }
+        trace!("Request header: {:?}: {:?}", new_name, header.value);
 
-                has_method = true;
-            },
-            header::HeaderName::PseudoScheme => {
-                if has_scheme {
-                    return Err(error::HttpError::StreamError(
-                        error::ErrorCode::ProtocolError,
-                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderScheme
-                    ));
-                }
+        if assert_request {
+            match new_name {
+                header::HeaderName::PseudoMethod => {
+                    if has_method {
+                        return Err(error::HttpError::StreamError(
+                            error::ErrorCode::ProtocolError,
+                            error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderMethod
+                        ));
+                    }
 
-                has_scheme = true;
-            },
-            header::HeaderName::PseudoPath => {
-                if has_path {
-                    return Err(error::HttpError::StreamError(
-                        error::ErrorCode::ProtocolError,
-                        error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderPath
-                    ));
-                }
+                    has_method = true;
+                },
+                header::HeaderName::PseudoScheme => {
+                    if has_scheme {
+                        return Err(error::HttpError::StreamError(
+                            error::ErrorCode::ProtocolError,
+                            error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderScheme
+                        ));
+                    }
 
-                has_path = true;
-            },
-            _ => {
-                // ignore
+                    has_scheme = true;
+                },
+                header::HeaderName::PseudoPath => {
+                    if has_path {
+                        return Err(error::HttpError::StreamError(
+                            error::ErrorCode::ProtocolError,
+                            error::ErrorName::MalformedRequestHasDuplicatePseudoHeaderPath
+                        ));
+                    }
+
+                    has_path = true;
+                },
+                _ => {
+                    // ignore
+                }
             }
         }
 
@@ -144,7 +154,7 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>) -> Result<header::
         headers.push_header(header);
     }
 
-    if !has_method || !has_scheme || !has_path {
+    if assert_request && (!has_method || !has_scheme || !has_path) {
         return Err(error::HttpError::StreamError(
             error::ErrorCode::ProtocolError,
             error::ErrorName::MalformedRequestHasMissingRequiredPseudoHeader
