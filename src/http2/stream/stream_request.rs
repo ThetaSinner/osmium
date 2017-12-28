@@ -84,7 +84,9 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>, assert_request: bo
     let mut headers = header::Headers::new();
 
     // TODO move to setup
-    let header_name_regex = Regex::new(r"^:?[!#$%&'*+\-.^_`|~0-9a-z]+$").unwrap();
+    let header_name_regex = Regex::new(r"^(:)?([!#$%&'*+\-.^_`|~0-9a-z]+)$").unwrap();
+
+    let mut is_pseudo = false;
 
     let mut has_method = false;
     let mut has_scheme = false;
@@ -95,12 +97,19 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>, assert_request: bo
         let new_name = match header.name {
             header::HeaderName::CustomHeader(name) => {
                 // TODO this could be better, seeing as is has to be done many times
-                if !header_name_regex.is_match(String::from(name.clone()).as_str()) {
-                    error!("Rejecting header because of bad name {:?}", name);
-                    return Err(error::HttpError::StreamError(
-                        error::ErrorCode::ProtocolError,
-                        error::ErrorName::NonLowerCaseHeaderNameIsRejectedAsMalformed
-                    ));
+                let name_string = String::from(name.clone());
+                let captures_opt = header_name_regex.captures(name_string.as_str());
+                match captures_opt {
+                    Some(captures) => {
+                        is_pseudo = captures.get(1).is_some();
+                    },
+                    None => {
+                        error!("Rejecting header because of bad name {:?}", name);
+                        return Err(error::HttpError::StreamError(
+                            error::ErrorCode::ProtocolError,
+                            error::ErrorName::NonLowerCaseHeaderNameIsRejectedAsMalformed
+                        ));
+                    }
                 }
 
                 name.as_str().into()
@@ -110,7 +119,7 @@ fn hpack_to_http2_headers(hpack_headers: Vec<header::Header>, assert_request: bo
             }
         };
 
-        trace!("Request header: {:?}: {:?}", new_name, header.value);
+        trace!("Request header (pseudo={:?}): {:?}: {:?}", is_pseudo, new_name, header.value);
 
         if assert_request {
             match new_name {
